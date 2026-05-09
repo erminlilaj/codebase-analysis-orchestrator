@@ -1,0 +1,35 @@
+# Agent-local instructions and coordination files
+AGENT.md
+agents/
+claude.md
+codex.md
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Generated exports and temporary workspaces
+exports/
+tmp/
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
