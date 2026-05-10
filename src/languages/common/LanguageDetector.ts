@@ -1,0 +1,51 @@
+import path from 'node:path';
+
+const EXTENSION_MAP: Record<string, string> = {
+  '.cob': 'cobol',
+  '.cbl': 'cobol',
+  '.cpy': 'cobol',
+  '.copy': 'cobol',
+  '.pco': 'cobol',
+  '.ts': 'typescript',
+  '.tsx': 'typescript',
+  '.js': 'javascript',
+  '.jsx': 'javascript',
+  '.mjs': 'javascript',
+  '.cjs': 'javascript',
+  '.py': 'python',
+  '.java': 'java',
+  '.kt': 'kotlin',
+  '.scala': 'scala',
+  '.cpp': 'cpp',
+  '.cc': 'cpp',
+  '.cxx': 'cpp',
+  '.hpp': 'cpp',
+  '.hxx': 'cpp',
+  '.c': 'c',
+  '.h': 'c',
+  '.go': 'go',
+  '.rs': 'rust',
+  '.rb': 'ruby',
+  '.php': 'php',
+  '.cs': 'csharp',
+  '.sh': 'shell',
+  '.bash': 'shell',
+  '.zsh': 'shell',
+  '.sql': 'sql',
+  '.json': 'json',
+  '.yaml': 'yaml',
+  '.yml': 'yaml',
+  '.xml': 'xml',
+  '.html': 'html',
+  '.htm': 'html',
+  '.css': 'css',
+  '.scss': 'css',
+  '.sass': 'css',
+  '.md': 'markdown',
+  '.mdx': 'markdown',
+};
+
+export function detectLanguage(filename: string): string {
+  const ext = path.extname(filename).toLowerCase();
+  return EXTENSION_MAP[ext] ?? 'generic';
+}
