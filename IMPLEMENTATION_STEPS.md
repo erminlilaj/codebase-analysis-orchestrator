@@ -19,7 +19,7 @@ Accepted stack decisions:
   `SELECT ... FOR UPDATE SKIP LOCKED`
 - Future queue option: Redis/BullMQ, deferred
 
-## Phase 1: Project Skeleton
+## Phase 1: Project Skeleton — [done]
 
 1. Create `package.json` with npm scripts.
 2. Add TypeScript configuration in `tsconfig.json`.
@@ -51,7 +51,7 @@ tmp/workspaces/
 - `tmp/`
 - Prisma local artifacts if needed
 
-## Phase 2: Configuration
+## Phase 2: Configuration — [done]
 
 1. Add `src/config/env.ts`.
 2. Validate environment variables at startup.
@@ -72,7 +72,7 @@ WORKER_CONCURRENCY
 
 4. Keep secrets out of logs and exports.
 
-## Phase 3: Prisma Schema
+## Phase 3: Prisma Schema — [done]
 
 1. Create `prisma/schema.prisma`.
 2. Model generic core entities only:
@@ -112,7 +112,7 @@ cancelled
 5. Use JSON fields for provider-specific and resolver-specific metadata.
 6. Do not add COBOL-specific or Bob-specific database models.
 
-## Phase 4: Core Interfaces
+## Phase 4: Core Interfaces — [done]
 
 1. Add `src/languages/common/types.ts`.
 2. Add `src/languages/common/ContextResolver.ts`.
@@ -129,7 +129,7 @@ cancelled
 
 6. Do not add `BobJob`, `BobAnswer`, `CobolFile`, or `CopybookLink` to core.
 
-## Phase 5: File Scanner and Language Detection
+## Phase 5: File Scanner and Language Detection — [done]
 
 1. Implement a repository file scanner under `src/core/files/`.
 2. Stream or batch filesystem traversal; do not load huge file lists into memory
@@ -156,7 +156,7 @@ cancelled
 
 7. Unknown files should fall back to `generic`.
 
-## Phase 6: Context Resolvers
+## Phase 6: Context Resolvers — [done]
 
 1. Implement `src/languages/generic/GenericResolver.ts`.
 2. Generic resolver returns:
@@ -179,7 +179,7 @@ cancelled
 6. Store unresolved copybooks in `unresolvedDependencies`.
 7. Keep COBOL-specific details in bundle metadata, not core models.
 
-## Phase 7: Questions and Bundle Building
+## Phase 7: Questions and Bundle Building — [done]
 
 1. Add core question services under `src/core/questions/`.
 2. Add bundle builder under `src/core/bundles/`.
@@ -193,7 +193,7 @@ cancelled
 5. Add the initial COBOL question set.
 6. Pilot target: 10 files and 3 questions.
 
-## Phase 8: Job Generation
+## Phase 8: Job Generation — [working]
 
 1. Add job generation under `src/core/jobs/`.
 2. Generate jobs using this unit:
@@ -219,7 +219,7 @@ main source file + resolved context files + one question + one provider
 5. Ensure job generation can handle thousands of files without creating all
    transient objects in memory at once.
 
-## Phase 9: Database-Backed Queue
+## Phase 9: Database-Backed Queue — [pending]
 
 1. Implement job claiming with PostgreSQL row locking.
 2. Use `SELECT ... FOR UPDATE SKIP LOCKED` inside a transaction.
@@ -233,7 +233,7 @@ main source file + resolved context files + one question + one provider
 
 7. Add stale job recovery in `src/worker/recoverStaleJobs.ts`.
 
-## Phase 10: Worker
+## Phase 10: Worker — [pending]
 
 1. Add `src/worker/WorkerLoop.ts`.
 2. Add a separate worker entrypoint, for example:
@@ -255,7 +255,7 @@ npm run dev:worker
 4. Keep worker process separate from the API process.
 5. Make worker concurrency configurable.
 
-## Phase 11: Workspace Builder
+## Phase 11: Workspace Builder — [pending]
 
 1. Add `src/worker/WorkspaceBuilder.ts`.
 2. Create one workspace per job under `tmp/workspaces/`.
@@ -268,7 +268,7 @@ npm run dev:worker
 5. Do not expose unrelated repository files to providers.
 6. Clean up workspaces after completion unless debug retention is enabled.
 
-## Phase 12: Bob Shell Provider
+## Phase 12: Bob Shell Provider — [pending]
 
 1. Add Bob-specific code only under `src/providers/bob/`.
 2. Add:
@@ -304,7 +304,7 @@ bob --auth-method api-key -p "..."
 9. Unit tests should mock child process execution and must not require a real Bob
    installation.
 
-## Phase 13: REST API
+## Phase 13: REST API — [pending]
 
 1. Add Fastify server in `src/api/server.ts`.
 2. Add route modules:
@@ -333,7 +333,7 @@ bob --auth-method api-key -p "..."
 4. Keep API paths generic. Do not expose Bob- or COBOL-specific paths unless a
    plugin administration feature requires it.
 
-## Phase 14: Exports
+## Phase 14: Exports — [pending]
 
 1. Add export logic under `src/core/exports/`.
 2. Implement:
@@ -355,7 +355,7 @@ bob --auth-method api-key -p "..."
 - answer
 - error state
 
-## Phase 15: Tests
+## Phase 15: Tests — [pending]
 
 1. Add unit tests for:
 
@@ -376,7 +376,7 @@ bob --auth-method api-key -p "..."
 4. The queue claim test should verify concurrent workers do not claim the same
    job.
 
-## Phase 16: Pilot Workflow
+## Phase 16: Pilot Workflow — [pending]
 
 1. Prepare a pilot repository or fixture with at least 10 COBOL files.
 2. Scan the repository.

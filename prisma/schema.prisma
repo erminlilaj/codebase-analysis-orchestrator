@@ -61,8 +61,7 @@ model SourceFile {
   // Files this file depends on
   dependsOn    DependencyLink[] @relation("DependencySource")
 
-  bundleMain    BundleFile[] @relation("BundleMainFile")
-  bundleContext BundleFile[] @relation("BundleContextFile")
+  bundles       BundleFile[]
 
   @@unique([projectId, relativePath])
   @@index([projectId])
@@ -107,10 +106,7 @@ model BundleFile {
   role       String // "main" | "context"
 
   bundle     AnalysisBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
-
-  // Separate FK aliases to avoid Prisma ambiguous relation error on SourceFile
-  mainFile    SourceFile? @relation("BundleMainFile",    fields: [fileId], references: [id], onDelete: Cascade, map: "BundleFile_main_fk")
-  contextFile SourceFile? @relation("BundleContextFile", fields: [fileId], references: [id], onDelete: Cascade, map: "BundleFile_context_fk")
+  file       SourceFile     @relation(fields: [fileId],   references: [id], onDelete: Cascade)
 
   @@unique([bundleId, fileId, role])
   @@index([bundleId])
@@ -119,12 +115,15 @@ model BundleFile {
 
 model Question {
   id        String   @id @default(cuid())
+  key       String   @unique  // short slug, e.g. "purpose", "data-structures"
   text      String
+  language  String?           // null = universal; "cobol", "java", etc. = language-specific
   metadata  Json     @default("{}")
   createdAt DateTime @default(now())
 
   jobs      AnalysisJob[]
 
+  @@index([language])
   @@index([createdAt])
 }
 
