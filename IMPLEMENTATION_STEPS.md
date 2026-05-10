@@ -193,7 +193,7 @@ cancelled
 5. Add the initial COBOL question set.
 6. Pilot target: 10 files and 3 questions.
 
-## Phase 8: Job Generation — [working]
+## Phase 8: Job Generation — [done]
 
 1. Add job generation under `src/core/jobs/`.
 2. Generate jobs using this unit:
@@ -219,7 +219,7 @@ main source file + resolved context files + one question + one provider
 5. Ensure job generation can handle thousands of files without creating all
    transient objects in memory at once.
 
-## Phase 9: Database-Backed Queue — [pending]
+## Phase 9: Database-Backed Queue — [working]
 
 1. Implement job claiming with PostgreSQL row locking.
 2. Use `SELECT ... FOR UPDATE SKIP LOCKED` inside a transaction.
