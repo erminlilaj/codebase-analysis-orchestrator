@@ -1,0 +1,209 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum JobStatus {
+  pending
+  claimed
+  running
+  completed
+  failed
+  cancelled
+}
+
+// ---------------------------------------------------------------------------
+// Core entities
+// ---------------------------------------------------------------------------
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  repoPath    String
+  language    String   // primary language detected, e.g. "cobol", "java", "unknown"
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sourceFiles SourceFile[]
+  bundles     AnalysisBundle[]
+  runs        AnalysisRun[]
+  exports     Export[]
+
+  @@index([language])
+  @@index([createdAt])
+}
+
+model SourceFile {
+  id          String   @id @default(cuid())
+  projectId   String
+  relativePath String  // path relative to repoPath
+  language    String
+  sizeBytes   Int?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Files that depend on this file
+  dependedOnBy DependencyLink[] @relation("DependencyTarget")
+  // Files this file depends on
+  dependsOn    DependencyLink[] @relation("DependencySource")
+
+  bundleMain    BundleFile[] @relation("BundleMainFile")
+  bundleContext BundleFile[] @relation("BundleContextFile")
+
+  @@unique([projectId, relativePath])
+  @@index([projectId])
+  @@index([language])
+}
+
+model DependencyLink {
+  id         String @id @default(cuid())
+  sourceId   String // the file that imports / copies / references
+  targetId   String // the file being imported / copied / referenced
+  type       String // e.g. "copy", "include", "import", "call"
+
+  source     SourceFile @relation("DependencySource", fields: [sourceId], references: [id], onDelete: Cascade)
+  target     SourceFile @relation("DependencyTarget", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, type])
+  @@index([sourceId])
+  @@index([targetId])
+}
+
+// A bundle groups one main source file with its relevant context files.
+// One bundle is created per (mainFile, question) pair.
+model AnalysisBundle {
+  id          String   @id @default(cuid())
+  projectId   String
+  name        String?  // optional human-readable label
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  files       BundleFile[]
+  jobs        AnalysisJob[]
+
+  @@index([projectId])
+}
+
+// Junction table: which files belong to a bundle, and in which role.
+model BundleFile {
+  id         String @id @default(cuid())
+  bundleId   String
+  fileId     String
+  role       String // "main" | "context"
+
+  bundle     AnalysisBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+
+  // Separate FK aliases to avoid Prisma ambiguous relation error on SourceFile
+  mainFile    SourceFile? @relation("BundleMainFile",    fields: [fileId], references: [id], onDelete: Cascade, map: "BundleFile_main_fk")
+  contextFile SourceFile? @relation("BundleContextFile", fields: [fileId], references: [id], onDelete: Cascade, map: "BundleFile_context_fk")
+
+  @@unique([bundleId, fileId, role])
+  @@index([bundleId])
+  @@index([fileId])
+}
+
+model Question {
+  id        String   @id @default(cuid())
+  text      String
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  jobs      AnalysisJob[]
+
+  @@index([createdAt])
+}
+
+// One run = one full execution of the pipeline for a project.
+model AnalysisRun {
+  id          String    @id @default(cuid())
+  projectId   String
+  status      JobStatus @default(pending)
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  jobs        AnalysisJob[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// One job = one bundle + one question + one provider, processed by a worker.
+model AnalysisJob {
+  id          String    @id @default(cuid())
+  runId       String
+  bundleId    String
+  questionId  String
+  providerId  String    // free string, e.g. "bob", "openai", "anthropic"
+  status      JobStatus @default(pending)
+  priority    Int       @default(0)
+  attempts    Int       @default(0)
+  lastError   String?
+  claimedAt   DateTime?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  run         AnalysisRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
+  bundle      AnalysisBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  question    Question       @relation(fields: [questionId], references: [id])
+  answer      AnalysisAnswer?
+
+  @@index([status, priority, createdAt]) // for queue claiming: WHERE status='pending' ORDER BY priority DESC, createdAt ASC
+  @@index([runId])
+  @@index([bundleId])
+  @@index([claimedAt])               // for stale job recovery
+  @@index([providerId])
+}
+
+model AnalysisAnswer {
+  id          String   @id @default(cuid())
+  jobId       String   @unique
+  rawOutput   String   // full text returned by the provider
+  parsed      Json     @default("{}") // structured extraction (key/value pairs, scores, etc.)
+  modelId     String?  // provider-reported model name or version
+  tokensUsed  Int?
+  createdAt   DateTime @default(now())
+
+  job         AnalysisJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+}
+
+// Export records track generated output files on disk (JSON, CSV, Markdown).
+model Export {
+  id          String   @id @default(cuid())
+  projectId   String
+  format      String   // "json" | "csv" | "markdown"
+  filePath    String   // absolute or relative path to the file on disk
+  sizeBytes   Int?
+  metadata    Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([format])
+  @@index([createdAt])
+}
