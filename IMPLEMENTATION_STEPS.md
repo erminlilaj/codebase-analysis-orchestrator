@@ -304,7 +304,7 @@ bob --auth-method api-key -p "..."
 9. Unit tests should mock child process execution and must not require a real Bob
    installation.
 
-## Phase 13: REST API — [pending]
+## Phase 13: REST API — [complete]
 
 1. Add Fastify server in `src/api/server.ts`.
 2. Add route modules:
