@@ -1,0 +1,22 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. BILLING.
+       AUTHOR. THESIS-FIXTURE.
+
+       ENVIRONMENT DIVISION.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       COPY CUSTOMER.
+       01  TOTAL-DUE             PIC S9(9)V99 COMP-3.
+       01  DISCOUNT-RATE         PIC V99 VALUE 0.10.
+
+       PROCEDURE DIVISION.
+       MAIN-PROCEDURE.
+           IF CUST-ACTIVE
+               COMPUTE TOTAL-DUE = CUST-BALANCE * (1 - DISCOUNT-RATE)
+           ELSE
+               MOVE CUST-BALANCE TO TOTAL-DUE
+           END-IF.
+           DISPLAY 'Customer: ' CUST-NAME
+           DISPLAY 'Total due: ' TOTAL-DUE.
+           STOP RUN.

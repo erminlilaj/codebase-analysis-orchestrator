@@ -33,9 +33,10 @@ export function buildServer() {
   return app;
 }
 
-const app = buildServer();
-
-app.listen({ port: env.PORT, host: '0.0.0.0' }).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  const app = buildServer();
+  app.listen({ port: env.PORT, host: '0.0.0.0' }).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

@@ -333,7 +333,7 @@ bob --auth-method api-key -p "..."
 4. Keep API paths generic. Do not expose Bob- or COBOL-specific paths unless a
    plugin administration feature requires it.
 
-## Phase 14: Exports — [pending]
+## Phase 14: Exports — [complete]
 
 1. Add export logic under `src/core/exports/`.
 2. Implement:
