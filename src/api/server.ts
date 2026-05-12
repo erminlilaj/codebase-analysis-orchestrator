@@ -14,7 +14,7 @@ import { exportRoutes } from './routes/exports.routes';
 import { fsRoutes } from './routes/fs.routes';
 
 export function buildServer() {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
 
   app.setErrorHandler((error, _req, reply) => {
     if (error instanceof Prisma.PrismaClientKnownRequestError) {

@@ -134,6 +134,60 @@ describe('WorkerLoop.processJob', () => {
     });
   });
 
+  it('passes reconstructed main and context files to the provider', async () => {
+    mockFindUnique.mockResolvedValue(makeJob({
+      bundle: {
+        id: 'bundle-1',
+        metadata: { unresolvedDependencies: ['MISSING'] },
+        project: { repoPath: '/repo' },
+        files: [
+          {
+            role: 'main',
+            file: {
+              id: 'file-1',
+              projectId: 'project-1',
+              relativePath: 'src/main.cob',
+              language: 'cobol',
+              sizeBytes: 1024,
+              metadata: { checksum: 'main-checksum' },
+            },
+          },
+          {
+            role: 'context',
+            file: {
+              id: 'file-2',
+              projectId: 'project-1',
+              relativePath: 'copy/CUSTOMER.cpy',
+              language: 'cobol',
+              sizeBytes: 256,
+              metadata: { checksum: 'copy-checksum' },
+            },
+          },
+        ],
+      },
+    }) as any);
+    const provider = makeProvider();
+    const worker = new WorkerLoop(provider, makeWorkspace(), config);
+
+    await worker.processJob('job-1');
+
+    expect(provider.analyze).toHaveBeenCalledWith(expect.objectContaining({
+      bundle: expect.objectContaining({
+        mainFile: expect.objectContaining({
+          path: '/repo/src/main.cob',
+          checksum: 'main-checksum',
+        }),
+        contextFiles: [
+          expect.objectContaining({
+            path: '/repo/copy/CUSTOMER.cpy',
+            checksum: 'copy-checksum',
+          }),
+        ],
+        unresolvedDependencies: ['MISSING'],
+      }),
+    }));
+  });
+
   it('always calls workspace.cleanup even on success', async () => {
     mockFindUnique.mockResolvedValue(makeJob() as any);
     const workspace = makeWorkspace();
@@ -154,6 +208,44 @@ describe('WorkerLoop.processJob', () => {
     await worker.processJob('job-1');
 
     expect(workspace.cleanup).toHaveBeenCalledWith('job-1');
+  });
+
+  it('fails before workspace build when a bundle has no main file', async () => {
+    mockFindUnique.mockResolvedValue(makeJob({
+      bundle: {
+        id: 'bundle-1',
+        metadata: {},
+        project: { repoPath: '/repo' },
+        files: [
+          {
+            role: 'context',
+            file: {
+              id: 'file-2',
+              projectId: 'project-1',
+              relativePath: 'copy/CUSTOMER.cpy',
+              language: 'cobol',
+              sizeBytes: 256,
+              metadata: { checksum: 'copy-checksum' },
+            },
+          },
+        ],
+      },
+    }) as any);
+    const provider = makeProvider();
+    const workspace = makeWorkspace();
+    const worker = new WorkerLoop(provider, workspace, config);
+
+    await worker.processJob('job-1');
+
+    expect(workspace.build).not.toHaveBeenCalled();
+    expect(provider.analyze).not.toHaveBeenCalled();
+    expect(mockJobUpdate).toHaveBeenCalledWith({
+      where: { id: 'job-1' },
+      data: expect.objectContaining({
+        status: 'failed',
+        lastError: 'Bundle bundle-1 has no main file',
+      }),
+    });
   });
 
   it('resets to pending on transient error when attempts < maxAttempts', async () => {
