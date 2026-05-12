@@ -1,4 +1,7 @@
+import fs from 'fs';
+import path from 'path';
 import Fastify from 'fastify';
+import fastifyStatic from '@fastify/static';
 import { Prisma } from '@prisma/client';
 import { env } from '../config/env';
 import { projectRoutes } from './routes/projects.routes';
@@ -8,6 +11,7 @@ import { questionRoutes } from './routes/questions.routes';
 import { jobRoutes } from './routes/jobs.routes';
 import { answerRoutes } from './routes/answers.routes';
 import { exportRoutes } from './routes/exports.routes';
+import { fsRoutes } from './routes/fs.routes';
 
 export function buildServer() {
   const app = Fastify({ logger: true });
@@ -22,13 +26,30 @@ export function buildServer() {
     return reply.code(statusCode).send({ error: error.message ?? 'Internal server error' });
   });
 
-  app.register(projectRoutes, { prefix: '/projects' });
-  app.register(fileRoutes, { prefix: '/projects' });
-  app.register(bundleRoutes, { prefix: '/projects' });
-  app.register(questionRoutes, { prefix: '/questions' });
-  app.register(jobRoutes);
-  app.register(answerRoutes);
-  app.register(exportRoutes, { prefix: '/projects' });
+  app.register(projectRoutes, { prefix: '/api/projects' });
+  app.register(fileRoutes, { prefix: '/api/projects' });
+  app.register(bundleRoutes, { prefix: '/api/projects' });
+  app.register(questionRoutes, { prefix: '/api/questions' });
+  app.register(jobRoutes, { prefix: '/api' });
+  app.register(answerRoutes, { prefix: '/api' });
+  app.register(exportRoutes, { prefix: '/api/projects' });
+  app.register(fsRoutes, { prefix: '/api' });
+
+  // Serve the built web UI when it exists. In dev the user runs `npm run web`
+  // which starts Vite on its own port and proxies /api/* back here.
+  const webDist = path.resolve(__dirname, '../../dist/web');
+  if (fs.existsSync(path.join(webDist, 'index.html'))) {
+    app.register(fastifyStatic, {
+      root: webDist,
+      prefix: '/',
+    });
+    app.setNotFoundHandler((req, reply) => {
+      if (req.url.startsWith('/api/')) {
+        return reply.code(404).send({ error: 'Not found' });
+      }
+      return reply.sendFile('index.html');
+    });
+  }
 
   return app;
 }

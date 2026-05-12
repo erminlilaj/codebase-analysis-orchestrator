@@ -33,7 +33,7 @@ async function call<T = unknown>(
   url: string,
   body?: unknown,
 ): Promise<{ status: number; body: T }> {
-  const res = await app.inject({ method, url, payload: body });
+  const res = await app.inject({ method, url: `/api${url}`, payload: body as object | undefined });
   let parsed: unknown;
   try {
     parsed = res.body ? JSON.parse(res.body) : undefined;
