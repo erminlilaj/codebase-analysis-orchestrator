@@ -1,0 +1,14 @@
+{
+  "answer": "BILLING calculates customer charges.",
+  "confidence": "high",
+  "evidence": [
+    {
+      "file": "BILLING.cob",
+      "location": "PROCEDURE DIVISION",
+      "symbol": null,
+      "explanation": "The main procedure computes invoice totals."
+    }
+  ],
+  "unresolved": [],
+  "missingContext": []
+}

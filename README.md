@@ -261,6 +261,7 @@ src/
       types.ts
     bob/                        Bob Shell (Phase 12 — pending API key)
       BobPromptBuilder.ts       Deterministic Bob prompts for file refs/inline fixtures
+      BobOutputParser.ts        Parses Bob stdout/stderr into structured answers/metadata
     stub/
       StubProvider.ts           Deterministic canned answers for testing
 
@@ -362,7 +363,9 @@ constructor options for testing latency and retry behavior.
 **Bob Shell provider** (Phase 12, pending API key) will spawn the `bob` CLI
 as a child process. `BobPromptBuilder` is implemented now and supports both
 runtime `@relative/path` references against the workspace and inline-content
-prompts for deterministic local tests.
+prompts for deterministic local tests. `BobOutputParser` is also implemented
+with fixture coverage for strict JSON, embedded JSON, experimental NDJSON,
+malformed output, empty stdout, stderr-only failure, and timeout metadata.
 
 ### Database-backed queue
 
@@ -599,10 +602,10 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | Phase | Status | Notes |
 | --- | --- | --- |
 | 1–11: Project skeleton through workspace builder | Complete | |
-| 12: Bob Shell provider | In progress | Prompt builder implemented; output parser and shell adapter not yet implemented |
+| 12: Bob Shell provider | In progress | Prompt builder and output parser implemented; readiness checks and shell adapter not yet implemented |
 | 13: REST API | Complete | 7 route modules |
 | 14: Exports (JSON/CSV/Markdown) | Complete | Streaming, paginated, backpressure-aware |
-| 15: Tests (broaden coverage) | Partial | 135 unit tests passing; integration tests pending |
+| 15: Tests (broaden coverage) | Partial | 142 unit tests passing; integration tests pending |
 | 16: Pilot workflow | Demonstrable now via `npm run e2e` (stub); real COBOL pilot waits on Phase 12 |
 | Extra: Terminal UI | Complete | Ink-based dashboard at `npm run tui` |
 | Extra: Web UI | Complete | React + Vite + Tailwind at `npm run web`, full feature set |

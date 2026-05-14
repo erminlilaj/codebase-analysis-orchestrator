@@ -1,0 +1,18 @@
+Here is the requested structured answer:
+
+{
+  "answer": "PAYROLL computes employee pay.",
+  "confidence": "medium",
+  "evidence": [
+    {
+      "file": "PAYROLL.cob",
+      "location": "lines 20-40",
+      "symbol": "CALC-PAY",
+      "explanation": "The paragraph applies pay-rate calculations."
+    }
+  ],
+  "unresolved": ["TAXTABLE"],
+  "missingContext": []
+}
+
+Done.

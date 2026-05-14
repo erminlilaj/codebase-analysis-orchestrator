@@ -511,13 +511,24 @@ Use `unresolved`, not `unresolvedDependencies`, in the provider answer because
 it is shorter and language-agnostic. Keep main file, language, and question
 metadata outside the provider answer because the job already owns them.
 
-### Phase C: Add Bob Output Parser
+### Phase C: Add Bob Output Parser — [done]
 
 Create:
 
 ```text
 src/providers/bob/BobOutputParser.ts
 ```
+
+Status:
+
+- `[done]` `BobOutputParser.ts` preserves raw output and returns structured
+  parse metadata.
+- `[done]` It handles strict JSON, embedded JSON, NDJSON
+  `attempt_completion`, malformed JSON, empty stdout, stderr-only failure, and
+  timeout metadata.
+- `[done]` Fixture-based tests live in
+  `src/providers/bob/BobOutputParser.test.ts` and do not require Bob Shell or
+  credentials.
 
 The parser must always preserve raw output. It should handle:
 
@@ -674,9 +685,9 @@ Flag legend:
 2. `[P0][done]` Keep the fixture-repo stub pipeline demonstrable with
    `npm run e2e`.
 3. `[P1][done]` Add `BobPromptBuilder`.
-4. `[P1][next]` Add `BobOutputParser`.
-5. `[P1][pending]` Add fixture-based Bob output parser tests.
-6. `[P2][pending]` Add Bob provider config validation and readiness checks.
+4. `[P1][done]` Add `BobOutputParser`.
+5. `[P1][done]` Add fixture-based Bob output parser tests.
+6. `[P2][next]` Add Bob provider config validation and readiness checks.
 7. `[P2][pending]` Extend the provider interface with optional health support
    and make `StubProvider` report health.
 8. `[P2][pending]` Add provider health endpoints:
