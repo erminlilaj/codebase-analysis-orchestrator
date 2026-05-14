@@ -629,7 +629,7 @@ unknown, disabled, missing `BOB_COMMAND`, or missing `BOBSHELL_API_KEY`, return
 HTTP 400 and do not generate jobs. Allow an explicit `force: true` flag only for
 debugging or dry-run workflows.
 
-### Phase E: Add Provider Health Endpoints
+### Phase E: Add Provider Health Endpoints — [done]
 
 Add:
 
@@ -637,6 +637,13 @@ Add:
 GET /api/providers
 GET /api/providers/:id/health
 ```
+
+Status:
+
+- `[done]` Provider health endpoints are implemented in
+  `src/api/routes/providers.routes.ts`.
+- `[done]` Routes are registered under `/api/providers`.
+- `[done]` API coverage lives in `src/api/server.test.ts`.
 
 Example response:
 
@@ -704,9 +711,9 @@ Flag legend:
 6. `[P2][done]` Add Bob provider config validation and readiness checks.
 7. `[P2][done]` Extend the provider interface with optional health support
    and make `StubProvider` report health.
-8. `[P2][next]` Add provider health endpoints:
+8. `[P2][done]` Add provider health endpoints:
    `GET /api/providers` and `GET /api/providers/:id/health`.
-9. `[P3][pending]` Add disabled-by-default `BobShellProvider` scaffolding.
+9. `[P3][next]` Add disabled-by-default `BobShellProvider` scaffolding.
 10. `[P4][blocked]` Test real Bob Shell with an API key and save real CLI
     output fixtures.
 

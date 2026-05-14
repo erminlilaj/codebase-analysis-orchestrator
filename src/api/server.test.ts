@@ -45,6 +45,7 @@ const mocks = vi.hoisted(() => ({
   generateJobs: vi.fn(),
   getQuestionsForLanguage: vi.fn(),
   getProviderHealth: vi.fn(),
+  listProviderHealth: vi.fn(),
 }));
 
 vi.mock('../db/prisma', () => ({ prisma: mocks.prisma }));
@@ -54,6 +55,7 @@ vi.mock('../core/questions/questionService', () => ({
 }));
 vi.mock('../providers/providerRegistry', () => ({
   getProviderHealth: mocks.getProviderHealth,
+  listProviderHealth: mocks.listProviderHealth,
 }));
 
 import { buildServer } from './server';
@@ -73,6 +75,27 @@ describe('buildServer API routes', () => {
       enabled: true,
       available: true,
       retryable: false,
+    });
+    mocks.listProviderHealth.mockResolvedValue({
+      stub: {
+        providerId: 'stub',
+        name: 'Stub Provider',
+        type: 'stub',
+        configured: true,
+        enabled: true,
+        available: true,
+        retryable: false,
+      },
+      bob: {
+        providerId: 'bob',
+        name: 'IBM Bob Shell',
+        type: 'shell',
+        configured: false,
+        enabled: false,
+        available: false,
+        retryable: false,
+        reason: 'Bob provider disabled',
+      },
     });
     app = buildServer();
   });
@@ -132,6 +155,63 @@ describe('buildServer API routes', () => {
     expect(mocks.prisma.project.create).toHaveBeenCalledWith({
       data: { name: 'Fixture', repoPath: '/repo', language: 'unknown' },
     });
+  });
+
+  it('lists provider health under /api/providers', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/providers' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      stub: {
+        providerId: 'stub',
+        name: 'Stub Provider',
+        type: 'stub',
+        configured: true,
+        enabled: true,
+        available: true,
+        retryable: false,
+      },
+      bob: {
+        providerId: 'bob',
+        name: 'IBM Bob Shell',
+        type: 'shell',
+        configured: false,
+        enabled: false,
+        available: false,
+        retryable: false,
+        reason: 'Bob provider disabled',
+      },
+    });
+    expect(mocks.listProviderHealth).toHaveBeenCalledOnce();
+  });
+
+  it('returns provider health by id', async () => {
+    const health = {
+      providerId: 'bob',
+      name: 'IBM Bob Shell',
+      type: 'shell',
+      configured: false,
+      enabled: false,
+      available: false,
+      retryable: false,
+      reason: 'Bob provider disabled',
+    };
+    mocks.getProviderHealth.mockResolvedValue(health);
+
+    const res = await app.inject({ method: 'GET', url: '/api/providers/bob/health' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(health);
+    expect(mocks.getProviderHealth).toHaveBeenCalledWith('bob');
+  });
+
+  it('returns 404 for unknown provider health requests', async () => {
+    mocks.getProviderHealth.mockResolvedValue(undefined);
+
+    const res = await app.inject({ method: 'GET', url: '/api/providers/unknown/health' });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: 'Provider not found' });
   });
 
   it('filters run jobs by status after confirming the run exists', async () => {

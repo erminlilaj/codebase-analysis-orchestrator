@@ -464,6 +464,8 @@ routes live under `/projects/:id/...`; run-scoped routes under `/runs/:runId/...
 | `POST` | `/projects/:id/bundles` | Build one bundle per source file (idempotent) |
 | `GET` | `/projects/:id/runs` | List runs |
 | `POST` | `/projects/:id/runs` | Create run + generate jobs `{ providerId, questionIds?, priority? }` |
+| `GET` | `/providers` | List known provider health |
+| `GET` | `/providers/:id/health` | Get one provider health report |
 | `GET` | `/questions` | List questions (optional `?language=`) |
 | `POST` | `/questions` | Create question `{ key, text, language? }` |
 | `GET/PUT/DELETE` | `/questions/:id` | Manage one question |
@@ -611,10 +613,10 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | Phase | Status | Notes |
 | --- | --- | --- |
 | 1–11: Project skeleton through workspace builder | Complete | |
-| 12: Bob Shell provider | In progress | Prompt builder, output parser, and readiness checks implemented; health endpoints and shell adapter not yet implemented |
-| 13: REST API | Complete | 7 route modules |
+| 12: Bob Shell provider | In progress | Prompt builder, output parser, readiness checks, and health endpoints implemented; shell adapter not yet implemented |
+| 13: REST API | Complete | 8 route modules |
 | 14: Exports (JSON/CSV/Markdown) | Complete | Streaming, paginated, backpressure-aware |
-| 15: Tests (broaden coverage) | Partial | 154 unit tests passing; integration tests pending |
+| 15: Tests (broaden coverage) | Partial | 157 unit tests passing; integration tests pending |
 | 16: Pilot workflow | Demonstrable now via `npm run e2e` (stub); real COBOL pilot waits on Phase 12 |
 | Extra: Terminal UI | Complete | Ink-based dashboard at `npm run tui` |
 | Extra: Web UI | Complete | React + Vite + Tailwind at `npm run web`, full feature set |

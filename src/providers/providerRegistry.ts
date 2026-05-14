@@ -15,3 +15,15 @@ export async function getProviderHealth(providerId: string): Promise<ProviderHea
   if (providerId === 'bob') return checkBobProviderHealth(projectConfig.bob);
   return undefined;
 }
+
+export async function listProviderHealth(): Promise<Record<KnownProviderId, ProviderHealth>> {
+  const entries = await Promise.all(
+    knownProviderIds.map(async (providerId) => {
+      const health = await getProviderHealth(providerId);
+      if (!health) throw new Error(`Known provider has no health check: ${providerId}`);
+      return [providerId, health] as const;
+    }),
+  );
+
+  return Object.fromEntries(entries) as Record<KnownProviderId, ProviderHealth>;
+}
