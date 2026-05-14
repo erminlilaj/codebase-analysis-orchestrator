@@ -563,7 +563,11 @@ Status:
   command availability, timeout, buffer, and inline-byte settings.
 - `[done]` Run creation rejects unknown or unavailable providers before jobs
   are generated.
-- `[pending]` `BobShellProvider` execution adapter still needs to be added.
+- `[done]` `BobShellProvider` scaffolding is implemented with an injectable
+  executor, readiness guard, prompt construction, Bob CLI argument assembly,
+  and output parsing.
+- `[blocked]` Real Bob Shell execution still needs installed-CLI/API-key
+  verification before it is used for pilot runs.
 
 Required configuration:
 
@@ -713,8 +717,8 @@ Flag legend:
    and make `StubProvider` report health.
 8. `[P2][done]` Add provider health endpoints:
    `GET /api/providers` and `GET /api/providers/:id/health`.
-9. `[P3][next]` Add disabled-by-default `BobShellProvider` scaffolding.
-10. `[P4][blocked]` Test real Bob Shell with an API key and save real CLI
+9. `[P3][done]` Add disabled-by-default `BobShellProvider` scaffolding.
+10. `[P4][next][blocked]` Test real Bob Shell with an API key and save real CLI
     output fixtures.
 
 ## Scale Requirements

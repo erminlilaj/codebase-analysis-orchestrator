@@ -260,6 +260,7 @@ src/
       AnalysisProvider.ts       Interface every provider implements
       types.ts
     bob/                        Bob Shell (Phase 12 — pending API key)
+      BobShellProvider.ts       Disabled-by-default shell adapter scaffold
       BobPromptBuilder.ts       Deterministic Bob prompts for file refs/inline fixtures
       BobOutputParser.ts        Parses Bob stdout/stderr into structured answers/metadata
     stub/
@@ -370,7 +371,9 @@ prompts for deterministic local tests. `BobOutputParser` is also implemented
 with fixture coverage for strict JSON, embedded JSON, experimental NDJSON,
 malformed output, empty stdout, stderr-only failure, and timeout metadata. Bob
 readiness checks validate enablement, API key presence, command availability,
-and runtime limits before run creation generates jobs.
+and runtime limits before run creation generates jobs. `BobShellProvider` is
+scaffolded behind those readiness checks; tests inject a fake executor, so no
+real Bob install or credentials are required for the default suite.
 
 ### Database-backed queue
 
@@ -613,10 +616,10 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | Phase | Status | Notes |
 | --- | --- | --- |
 | 1–11: Project skeleton through workspace builder | Complete | |
-| 12: Bob Shell provider | In progress | Prompt builder, output parser, readiness checks, and health endpoints implemented; shell adapter not yet implemented |
+| 12: Bob Shell provider | In progress | Prompt builder, output parser, readiness checks, health endpoints, and shell adapter scaffold implemented; real Bob execution blocked on API key/CLI verification |
 | 13: REST API | Complete | 8 route modules |
 | 14: Exports (JSON/CSV/Markdown) | Complete | Streaming, paginated, backpressure-aware |
-| 15: Tests (broaden coverage) | Partial | 157 unit tests passing; integration tests pending |
+| 15: Tests (broaden coverage) | Partial | 161 unit tests passing; integration tests pending |
 | 16: Pilot workflow | Demonstrable now via `npm run e2e` (stub); real COBOL pilot waits on Phase 12 |
 | Extra: Terminal UI | Complete | Ink-based dashboard at `npm run tui` |
 | Extra: Web UI | Complete | React + Vite + Tailwind at `npm run web`, full feature set |
