@@ -1,7 +1,10 @@
-# Bob Shell — Complete Reference Documentation
+# Bob Shell — Reference Documentation
 
-> **Sources:** All findings below are sourced directly from the official IBM Bob documentation.  
-> Base URL: `https://bob.ibm.com/docs/shell`
+> **Source policy:** Sections marked with IBM URLs summarize official public IBM
+> Bob Shell documentation. Sections explicitly marked "empirical",
+> "project-specific", or "open doubt" are not official IBM documentation and
+> must be verified against the installed Bob Shell CLI before production use.  
+> Official base URL: `https://bob.ibm.com/docs/shell`
 
 ---
 
@@ -28,7 +31,8 @@
 17. [Sandboxing](#17-sandboxing)
 18. [MCP (Model Context Protocol)](#18-mcp-model-context-protocol)
 19. [Changelog](#19-changelog)
-20. [Phase 12 Integration Notes](#20-phase-12-integration-notes)
+20. [Official Documentation Coverage Audit](#20-official-documentation-coverage-audit)
+21. [Phase 12 Integration Notes](#21-phase-12-integration-notes)
 
 ---
 
@@ -205,15 +209,19 @@ cat prompt.txt | bob -p -
 
 ## 6. CLI Flags Reference
 
-**Source:** [https://bob.ibm.com/docs/shell/configuration/configuring](https://bob.ibm.com/docs/shell/configuration/configuring)
+**Sources:** [https://bob.ibm.com/docs/shell/configuration/configuring](https://bob.ibm.com/docs/shell/configuration/configuring), [https://bob.ibm.com/docs/shell/getting-started/install-and-setup](https://bob.ibm.com/docs/shell/getting-started/install-and-setup), [https://bob.ibm.com/docs/shell/troubleshooting/troubleshoot](https://bob.ibm.com/docs/shell/troubleshooting/troubleshoot)
+
+The configuration page contains the official command-line argument table. API-key
+authentication is documented on the install/setup page, and `--version` is
+mentioned on the troubleshooting page.
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--prompt` | `-p` | Non-interactive prompt — run and exit |
 | `--prompt-interactive` | `-i` | Start with an initial prompt, then enter interactive mode |
-| `--auth-method api-key` | — | Use API key authentication (`BOBSHELL_API_KEY` env var required) |
-| `--accept-license` | — | Accept the IBM license agreement (required on first non-interactive run) |
-| `--yolo` | — | Auto-approve all tool calls (file reads, writes, command execution) |
+| `--auth-method api-key` | — | Use API key authentication (`BOBSHELL_API_KEY` env var required); documented on install/setup page |
+| `--accept-license` | — | Accept the IBM license agreement |
+| `--yolo` | — | Auto-approve all tool calls |
 | `--approval-mode` | — | Set tool approval mode |
 | `--allowed-tools` | — | Specify tools to auto-approve (without approving everything) |
 | `--sandbox` | `-s` | Enable sandbox mode for this session |
@@ -224,6 +232,10 @@ cat prompt.txt | bob -p -
 | `--show-license` | — | Show full license file paths |
 | `--instance-id` | — | Specify instance ID for the session |
 | `--team-id` | — | Specify team ID for the session |
+| `--version` | — | Show installed version; mentioned in troubleshooting docs |
+
+Not in the public command-line argument table as of the current verification:
+`--output-format`, `stream-json`, and any published NDJSON event-schema flag.
 
 ---
 
@@ -248,7 +260,7 @@ cat error.log | bob -p "What caused this error?"
 
 ## 8. Output & Streaming
 
-**Source:** Empirically verified during project development (see session notes)
+**Source:** Empirical / project notes, not official public IBM documentation.
 
 > **Verification note:** The public IBM Bob Shell pages available at
 > `https://bob.ibm.com/docs/shell` document non-interactive output redirection
@@ -257,7 +269,8 @@ cat error.log | bob -p "What caused this error?"
 > must be rechecked with `bob --help` / `bob --version` whenever the Bob Shell
 > version changes.
 
-Bob Shell supports multiple output formats via the `--output-format` flag:
+Project notes suggest Bob Shell may support multiple output formats via an
+undocumented `--output-format` flag:
 
 | Format | Description |
 |--------|-------------|
@@ -279,7 +292,7 @@ Each line is a JSON object. The relevant events for extracting answers:
 {"type":"result","stats":{"input_tokens":123,"output_tokens":456,"total_tokens":579}}
 ```
 
-### 8.2 Full Non-Interactive Command (for Phase 12)
+### 8.2 Experimental Non-Interactive Command
 
 ```sh
 BOBSHELL_API_KEY=<key> bob \
@@ -290,6 +303,10 @@ BOBSHELL_API_KEY=<key> bob \
   --hide-intermediary-output \
   -p "What does this COBOL program do? @BILLING.cob @CUSTOMER.cpy"
 ```
+
+Do not make this the only supported provider path until the installed CLI proves
+the flag exists. The official fallback is plain stdout with prompt-level
+instructions such as "Format the answer as JSON".
 
 Parse the answer by filtering the NDJSON stream for `attempt_completion` events:
 ```ts
@@ -704,6 +721,12 @@ FROM bobshell-sandbox
 RUN apt-get install -y your-dependencies
 ```
 
+Build and use the custom sandbox image:
+
+```sh
+BUILD_SANDBOX=1 bob -s
+```
+
 ### 17.3 macOS Seatbelt Profiles
 
 | Profile | Network | Write scope | Use case |
@@ -723,11 +746,30 @@ RUN apt-get install -y your-dependencies
 - Restrictions on symlinks, privileged system commands, hardware access
 - The `create-pr` command is not compatible with sandbox sessions
 
+### 17.5 Trusted Folders
+
+**Source:** [https://bob.ibm.com/docs/shell/security/trusted-folders](https://bob.ibm.com/docs/shell/security/trusted-folders)
+
+Bob Shell tracks workspace trust decisions in `~/.bob/trustedFolders.json`.
+Untrusted folders run in a restricted safe mode:
+
+- project `.bob/settings.json` is ignored
+- project `.env` files are ignored
+- tool auto-approval is disabled
+- automatic memory loading is disabled
+- MCP servers do not connect
+- custom commands are not loaded
+
+Non-interactive sessions do not display the trust prompt. They use IDE trust if
+available, then `~/.bob/trustedFolders.json`, and otherwise default to trusted.
+For automation, preconfigure trust decisions before relying on non-interactive
+Bob runs.
+
 ---
 
 ## 18. MCP (Model Context Protocol)
 
-**Source:** [https://bob.ibm.com/docs/shell](https://bob.ibm.com/docs/shell), [https://bob.ibm.com/docs/shell/configuration/configuring](https://bob.ibm.com/docs/shell/configuration/configuring)
+**Source:** [https://bob.ibm.com/docs/shell/configuration/mcp/mcp-bobshell](https://bob.ibm.com/docs/shell/configuration/mcp/mcp-bobshell)
 
 MCP extends Bob Shell's capabilities with custom tools and external integrations.
 
@@ -738,40 +780,58 @@ MCP extends Bob Shell's capabilities with custom tools and external integrations
   "mcp": {
     "serverCommand": "node ./mcp-server.js",
     "allowed": ["my-server"],
-    "excluded": [],
-    "servers": {
-      "my-server": {
-        "command": "node",
-        "args": ["./mcp-server.js"],
-        "env": { "API_KEY": "..." },
-        "cwd": "/project",
-        "timeout": 30000,
-        "trust": true,
-        "includeTools": ["tool-a"],
-        "excludeTools": ["tool-b"]
-      }
+    "excluded": []
+  },
+  "mcpServers": {
+    "my-server": {
+      "command": "node",
+      "args": ["./mcp-server.js"],
+      "env": { "API_KEY": "..." },
+      "cwd": "/project",
+      "timeout": 30000,
+      "alwaysAllow": ["tool-a"],
+      "disabled": false
     }
   }
 }
 ```
+
+The dedicated MCP page documents global config in
+`~/.bob/mcp_settings.json`, project config in `.bob/mcp.json`, and project
+server definitions overriding global definitions with the same server name.
 
 ### 18.2 Remote MCP Servers
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "remote-server": {
-        "url": "ws://localhost:8080",
-        "httpUrl": "http://localhost:8080",
-        "headers": { "Authorization": "Bearer <token>" }
-      }
+  "mcpServers": {
+    "remote-server": {
+      "url": "https://your-server-url.com/mcp",
+      "headers": { "Authorization": "Bearer <token>" },
+      "alwaysAllow": ["tool-a"]
     }
   }
 }
 ```
 
-### 18.3 Use Cases
+The dedicated MCP page documents `url` for SSE transport and `httpURL` for
+streamable HTTP transport.
+
+### 18.3 Legacy / General Settings Shape
+
+The general configuration page also documents top-level MCP settings:
+
+```json
+{
+  "mcp": {
+    "serverCommand": "node ./mcp-server.js",
+    "allowed": ["my-server"],
+    "excluded": []
+  }
+}
+```
+
+### 18.4 Use Cases
 
 - Connect to databases and APIs from the terminal
 - Access specialised development and operations tools
@@ -794,11 +854,71 @@ MCP extends Bob Shell's capabilities with custom tools and external integrations
 
 ---
 
-## 20. Phase 12 Integration Notes
+## 20. Official Documentation Coverage Audit
+
+**Source:** Current public navigation under [https://bob.ibm.com/docs/shell](https://bob.ibm.com/docs/shell)
+
+Official Bob Shell documentation pages found in the public docs:
+
+- Welcome to Bob Shell: `/docs/shell`
+- Changelog: `/docs/shell/changelog`
+- FAQ: `/docs/shell/faq`
+- Installing: `/docs/shell/getting-started/install-and-setup`
+- Uninstalling: `/docs/shell/getting-started/uninstalling-bobshell`
+- Starting an interactive session: `/docs/shell/getting-started/start-bobshell-interactive`
+- Starting a non-interactive session: `/docs/shell/getting-started/start-bobshell-non-interactive`
+- Usage examples: `/docs/shell/getting-started/bobshell-examples`
+- Tools: `/docs/shell/core-concepts/tools`
+- Configuring: `/docs/shell/configuration/configuring`
+- Keyboard shortcuts: `/docs/shell/configuration/keyboard-shortcuts`
+- Custom rules: `/docs/shell/configuration/bobshell-custom-rules`
+- Custom modes: `/docs/shell/configuration/custom-modes-bobshell`
+- Integrating with Bob IDE: `/docs/shell/configuration/ide-integration`
+- Ignoring files: `/docs/shell/configuration/ignoring-files`
+- Memory files: `/docs/shell/configuration/memory-import`
+- Telemetry data: `/docs/shell/configuration/telemetry-data-shell`
+- MCP: `/docs/shell/configuration/mcp/mcp-bobshell`
+- Checkpointing: `/docs/shell/features/checkpointing`
+- Slash commands: `/docs/shell/features/slash-commands`
+- Instance command: `/docs/shell/features/instance-command`
+- Security guidelines: `/docs/shell/security/bob-security-guidance`
+- Sandboxing: `/docs/shell/security/sandboxing`
+- Trusted folders: `/docs/shell/security/trusted-folders`
+- Troubleshooting: `/docs/shell/troubleshooting/troubleshoot`
+
+Claims that are official and relevant to this project:
+
+- API-key authentication is documented for automation, CI/CD, and
+  non-interactive environments.
+- `BOBSHELL_API_KEY` plus `--auth-method api-key` is the documented automation
+  authentication path.
+- `@file` references are documented for providing project context.
+- `--hide-intermediary-output`, `--accept-license`, `--chat-mode`,
+  `--instance-id`, and `--team-id` are documented CLI flags.
+- The official changelog currently lists `1.0.3`, `1.0.2`, and `1.0.1`.
+
+Claims that are not official public documentation and must be treated as
+runtime observations or open questions:
+
+- `--output-format`
+- `stream-json`
+- NDJSON output schema
+- `attempt_completion` final-answer event
+- `result.stats` token metadata event
+- An official troubleshooting fix for `Missing authorization code`
+- Skills / `.bob/skills` as a Bob Shell feature
+- Orchestrator mode as a Bob Shell built-in mode
+
+If these non-official items are used in this project, add fixture tests and a
+local CLI compatibility check before enabling real Bob execution.
+
+---
+
+## 21. Phase 12 Integration Notes
 
 This section documents the specifics needed to build `BobShellProvider` in this project (`src/providers/bob/BobShellProvider.ts`).
 
-### 20.1 Prerequisite
+### 21.1 Prerequisite
 
 Obtain an API key with **"Inference" scope** from the Bob web portal. Set `BOBSHELL_API_KEY` in the environment (or in `.env`).
 
@@ -807,7 +927,20 @@ context for inference requests. For this provider, prefer an **Inference** key
 because no extra team or instance headers/flags are required by the documented
 Bob Shell CLI flow.
 
-### 20.2 Command Template
+### 21.2 Command Template
+
+Officially documented baseline:
+
+```sh
+BOBSHELL_API_KEY=<key> bob \
+  --auth-method api-key \
+  --accept-license \
+  --chat-mode ask \
+  --hide-intermediary-output \
+  -p "<question text> @<main-file> [@<context-file> ...]"
+```
+
+Experimental stream-output variant, only after installed-CLI verification:
 
 ```sh
 BOBSHELL_API_KEY=<key> bob \
@@ -825,14 +958,17 @@ official non-interactive docs say read-only tools are available by default, and
 `--yolo` enables file modifications. This project only needs Bob to read the
 workspace files and produce an answer.
 
-If `--output-format stream-json` is not supported by the installed Bob Shell
-version, fall back to the default text output and parse the final stdout as the
-raw answer. Keep `--hide-intermediary-output` when available to reduce parsing
-noise.
+Default implementation should start with the officially documented baseline:
+plain stdout plus prompt-level JSON instructions. If
+`--output-format stream-json` is supported by the installed Bob Shell version,
+the provider may enable the stream parser behind a feature flag or compatibility
+check. Keep `--hide-intermediary-output` when available to reduce parsing noise.
 
-### 20.3 NDJSON Parsing
+### 21.3 Output Parsing
 
-Read stdout line by line. Each line is a JSON object:
+Official docs do not publish a structured output schema. The parser should first
+support plain stdout and prompt-requested JSON. If the experimental stream
+variant is enabled, read stdout line by line and parse each line as JSON:
 
 ```ts
 // Extract answer
@@ -847,7 +983,30 @@ if (event.type === 'result') {
 }
 ```
 
-### 20.4 File Reference Strategy
+The provider prompt should ask for this JSON object shape:
+
+```json
+{
+  "answer": "string",
+  "confidence": "high|medium|low",
+  "evidence": [
+    {
+      "file": "string",
+      "location": "string",
+      "symbol": "string|null",
+      "explanation": "string"
+    }
+  ],
+  "unresolved": ["string"],
+  "missingContext": ["string"]
+}
+```
+
+Use `unresolved`, not `unresolvedDependencies`, in provider output. Keep the
+main file, language, and question metadata outside the provider answer because
+the job already owns that context.
+
+### 21.4 File Reference Strategy
 
 For a COBOL bundle with a main file and copybooks, build the `@file` references from the workspace:
 
@@ -862,23 +1021,88 @@ Use paths relative to `workspacePath`, not absolute source-repository paths.
 This keeps provider prompts aligned with the isolated workspace and avoids
 exposing unrelated host filesystem layout.
 
-### 20.5 Error Handling
+The prompt builder should support two source modes:
 
-- Exit code non-zero → transient error → WorkerLoop will retry up to `maxAttempts`
-- `attempt_completion` event missing from stream → treat as transient error
-- `BOBSHELL_API_KEY` not set → throw immediately (configuration error, no retry)
-- Bob executable missing or unsupported flags → configuration error, no retry
-- Process timeout → transient error; capture timeout state in provider metadata
+```ts
+type PromptFileMode = 'file-reference' | 'inline-content';
+```
 
-### 20.6 Environment Variables
+- Bob runtime default: `file-reference`
+- local/unit-test default: `inline-content` or fixture content
+- inline mode default ceiling: 50 KB total bundle size
+
+Never silently truncate source files. If inline mode exceeds the configured
+maximum, reject with a clear error and require file-reference mode.
+
+### 21.5 Error Handling
+
+Non-retryable:
+
+- `BOBSHELL_API_KEY` not set
+- provider disabled
+- Bob executable missing or not executable
+- unsupported CLI flag
+- malformed provider config
+- invalid provider ID
+- missing workspace
+
+Retryable:
+
+- timeout
+- transient process failure
+- transient network error
+- missing final answer in configured output mode
+- malformed or partial model output
+- parse failure
+
+Classify parse failures as `failureKind: "parse_error"` and cap them lower than
+generic transient failures, with a recommended maximum of two attempts.
+
+### 21.6 Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `BOBSHELL_API_KEY` | Yes | API key with Inference scope |
 | `BOB_COMMAND` | No | CLI binary name/path; defaults to `bob` |
+| `BOB_PROVIDER_ENABLED` | No | Explicitly enables the Bob provider; default should be false |
+| `BOB_TIMEOUT_MS` | No | Child process timeout; recommended default 180000 |
+| `BOB_MAX_BUFFER_MB` | No | Child process stdout/stderr buffer cap; recommended default 20 |
+| `BOB_MAX_INLINE_BYTES` | No | Inline prompt source ceiling; recommended default 51200 |
 | `BOB_SHELL_SANDBOX` | No | Set to `true` to sandbox Bob Shell execution |
 
-### 20.7 Project Readiness Checklist
+Keep `BOB_COMMAND` as the command config name. It covers PATH lookup, absolute
+paths, and wrapper scripts, and it already exists in the project.
+
+### 21.7 Provider Health Contract
+
+Extend the provider interface with optional health support:
+
+```ts
+export type ProviderHealth = {
+  providerId: string;
+  name: string;
+  type: 'stub' | 'shell' | 'http' | 'local';
+  configured: boolean;
+  enabled: boolean;
+  available: boolean;
+  retryable: boolean;
+  reason?: string;
+  details?: Record<string, unknown>;
+};
+```
+
+Bob health should check:
+
+- provider is explicitly enabled
+- `BOBSHELL_API_KEY` exists
+- `BOB_COMMAND` resolves and `BOB_COMMAND --version` exits successfully
+- timeout, buffer, and inline-size settings are valid
+
+Run creation should reject unavailable providers with HTTP 400 before generating
+jobs. If readiness fails later during worker execution, fail the job with a
+non-retryable error and do not requeue it.
+
+### 21.8 Project Readiness Checklist
 
 Before implementing `BobShellProvider`, verify the installed Bob Shell CLI:
 
@@ -895,7 +1119,7 @@ terminal, but the Codex command environment still cannot resolve `bob` on
 `PATH`. Set `BOB_COMMAND` to the executable path if the worker environment has
 the same issue, then revalidate the streaming contract from this repository.
 
-### 20.8 No-API-Key Testing Path
+### 21.9 No-API-Key Testing Path
 
 There is no documented way to run reliable non-interactive Bob Shell automation
 without Bob access. IBM documents two auth paths:
@@ -939,7 +1163,7 @@ This validates whether the question phrasing and `@file` context are sensible,
 but it does not validate child-process spawning, stdout parsing, exit codes,
 timeouts, or API-key authentication.
 
-### 20.9 Open Doubts To Verify
+### 21.10 Open Doubts To Verify
 
 These points are not fully settled by the public docs and should be verified
 against the installed Bob Shell 1.0.3 CLI before enabling the real provider:

@@ -402,14 +402,15 @@ Research basis:
 
 ### Phase A: Harden the Existing Stub Pipeline
 
-Before integrating real Bob execution, verify the whole internal path with
-`StubProvider`:
+Before integrating real Bob execution, verify the whole internal path with a
+single integration test against a fixture repo and `StubProvider`:
 
 ```text
 scan -> bundle -> job generation -> worker -> answer storage -> export
 ```
 
-Add or tighten tests for:
+The integration test is the source of truth. Add or tighten supporting tests
+where they are missing:
 
 - job status transitions
 - retry behavior
@@ -439,6 +440,7 @@ The prompt builder should take:
 - unresolved dependencies
 - expected JSON schema
 - prompt file mode
+- max inline bytes
 
 It must produce deterministic prompts and be covered by fixtures or snapshots.
 Do not put Bob prompt construction in the worker. The worker should only build
@@ -470,10 +472,36 @@ Defaults:
 
 - Bob runtime default: `file-reference`
 - local/unit-test default: `inline-content` or fixture content
+- max inline content size: 50 KB total bundle size by default
 
 Large real jobs should prefer file-reference mode. Unit tests and parser
 fixtures should prefer inline content because they do not depend on Bob's file
-resolution behavior.
+resolution behavior. Never silently truncate source files. If inline mode
+exceeds `provider.maxInlineBytes`, reject with a clear error and require
+file-reference mode.
+
+Expected provider answer schema:
+
+```json
+{
+  "answer": "string",
+  "confidence": "high|medium|low",
+  "evidence": [
+    {
+      "file": "string",
+      "location": "string",
+      "symbol": "string|null",
+      "explanation": "string"
+    }
+  ],
+  "unresolved": ["string"],
+  "missingContext": ["string"]
+}
+```
+
+Use `unresolved`, not `unresolvedDependencies`, in the provider answer because
+it is shorter and language-agnostic. Keep main file, language, and question
+metadata outside the provider answer because the job already owns them.
 
 ### Phase C: Add Bob Output Parser
 
@@ -494,7 +522,10 @@ The parser must always preserve raw output. It should handle:
 - timeout failure metadata
 
 Parser tests must use saved fixture outputs and must not require a real Bob
-installation or credentials.
+installation or credentials. If real Bob outputs exist, save them immediately
+for normal CLI output, `--hide-intermediary-output`, and any attempted
+`stream-json` run. If no real outputs exist, create synthetic fixtures clearly
+marked as synthetic. Include malformed and partial output fixtures.
 
 ### Phase D: Add Disabled-By-Default Bob Provider Scaffolding
 
@@ -505,15 +536,15 @@ Required configuration:
 
 ```text
 BOB_PROVIDER_ENABLED=false
-BOB_SHELL_PATH=bob
+BOB_COMMAND=bob
 BOBSHELL_API_KEY=...
 BOB_TIMEOUT_MS=180000
 BOB_MAX_BUFFER_MB=20
+BOB_MAX_INLINE_BYTES=51200
 ```
 
-The codebase currently has `BOB_COMMAND`; either keep it as the implementation
-name or migrate deliberately to `BOB_SHELL_PATH`. Do not support two names
-silently unless there is a clear compatibility reason.
+Keep `BOB_COMMAND`. It already exists in the codebase, covers PATH lookup,
+absolute paths, and wrapper scripts, and is more flexible than `BOB_SHELL_PATH`.
 
 Provider readiness should check:
 
@@ -525,19 +556,45 @@ Provider readiness should check:
 Readiness result shape:
 
 ```ts
-type ProviderReadiness =
-  | { status: 'available' }
-  | {
-      status: 'unavailable';
-      reason: 'disabled' | 'missing_api_key' | 'command_not_found' | 'invalid_config';
-    };
+export type ProviderHealth = {
+  providerId: string;
+  name: string;
+  type: 'stub' | 'shell' | 'http' | 'local';
+  configured: boolean;
+  enabled: boolean;
+  available: boolean;
+  retryable: boolean;
+  reason?: string;
+  details?: Record<string, unknown>;
+};
 ```
 
 Keep real Bob execution disabled unless all of these are true:
 
 1. `BOBSHELL_API_KEY` is present.
-2. `BOB_SHELL_PATH` or the chosen command config resolves.
+2. `BOB_COMMAND` resolves.
 3. The Bob provider is explicitly enabled.
+
+Extend the provider interface with optional health support so existing providers
+remain compatible:
+
+```ts
+export interface AnalysisProvider {
+  id: string;
+  displayName: string;
+  analyze(input: ProviderAnalysisInput): Promise<ProviderAnalysisResult>;
+  health?(): Promise<ProviderHealth>;
+}
+```
+
+`StubProvider` should report configured, enabled, available, and non-retryable.
+Bob health should check `BOBSHELL_API_KEY`, provider enabled state, valid config,
+and `BOB_COMMAND --version`.
+
+Provider availability should be enforced at run creation. If the provider is
+unknown, disabled, missing `BOB_COMMAND`, or missing `BOBSHELL_API_KEY`, return
+HTTP 400 and do not generate jobs. Allow an explicit `force: true` flag only for
+debugging or dry-run workflows.
 
 ### Phase E: Add Provider Health Endpoints
 
@@ -552,22 +609,54 @@ Example response:
 
 ```json
 {
-  "name": "bob-shell",
-  "type": "shell",
-  "enabled": false,
-  "available": false,
-  "reason": "missing_api_key"
+  "stub": { "enabled": true, "available": true },
+  "bob": {
+    "enabled": false,
+    "available": false,
+    "reason": "BOBSHELL_API_KEY not set"
+  }
 }
 ```
 
 These endpoints make provider debugging visible without starting a worker or
-waiting for a job to fail.
+waiting for a job to fail. Report configured/enabled providers with live
+readiness. Also report known-but-disabled providers with static state, but do
+not run `health()` for disabled providers.
+
+### Phase F: Failure Classification
+
+Non-retryable failures:
+
+- missing API key
+- missing or non-executable command
+- unsupported CLI flag
+- malformed provider config
+- invalid provider ID
+- missing workspace
+- provider disabled
+
+Retryable failures:
+
+- timeout
+- transient process failure
+- transient network error
+- malformed or partial model output
+- parse failure
+
+Classify parse failures as `failureKind: "parse_error"`. They are retryable, but
+with a lower cap of two attempts, and should be visible distinctly in exports
+and dashboards.
+
+Run creation should block unavailable providers before jobs exist. If readiness
+fails during worker execution because config changed or credentials were
+revoked, mark the job failed with a non-retryable error. Do not requeue it as
+pending. Mark the parent run as blocked with a clear reason when the data model
+supports that status.
 
 ### Priority Order
 
 1. Keep `StubProvider` working.
-2. Harden pipeline tests around jobs, retries, stale recovery, answer storage,
-   and exports.
+2. Add the fixture-repo integration test for the StubProvider pipeline.
 3. Add `BobPromptBuilder`.
 4. Add `BobOutputParser`.
 5. Add Bob provider config validation and readiness checks.
