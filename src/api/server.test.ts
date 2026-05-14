@@ -44,12 +44,16 @@ const mocks = vi.hoisted(() => ({
   },
   generateJobs: vi.fn(),
   getQuestionsForLanguage: vi.fn(),
+  getProviderHealth: vi.fn(),
 }));
 
 vi.mock('../db/prisma', () => ({ prisma: mocks.prisma }));
 vi.mock('../core/jobs/jobGenerator', () => ({ generateJobs: mocks.generateJobs }));
 vi.mock('../core/questions/questionService', () => ({
   getQuestionsForLanguage: mocks.getQuestionsForLanguage,
+}));
+vi.mock('../providers/providerRegistry', () => ({
+  getProviderHealth: mocks.getProviderHealth,
 }));
 
 import { buildServer } from './server';
@@ -61,6 +65,15 @@ describe('buildServer API routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.getProviderHealth.mockResolvedValue({
+      providerId: 'stub',
+      name: 'Stub Provider',
+      type: 'stub',
+      configured: true,
+      enabled: true,
+      available: true,
+      retryable: false,
+    });
     app = buildServer();
   });
 
@@ -168,6 +181,7 @@ describe('buildServer API routes', () => {
       jobCount: 4,
     });
     expect(mocks.getQuestionsForLanguage).toHaveBeenCalledWith('cobol');
+    expect(mocks.getProviderHealth).toHaveBeenCalledWith('stub');
     expect(mocks.generateJobs).toHaveBeenCalledWith({
       runId: 'run-1',
       bundleIds: ['bundle-1', 'bundle-2'],
@@ -192,6 +206,53 @@ describe('buildServer API routes', () => {
 
     expect(res.statusCode).toBe(422);
     expect(res.json()).toEqual({ error: 'No bundles found. Build bundles first.' });
+    expect(mocks.prisma.analysisRun.create).not.toHaveBeenCalled();
+    expect(mocks.generateJobs).not.toHaveBeenCalled();
+  });
+
+  it('rejects run creation for unknown providers before generating jobs', async () => {
+    mocks.prisma.project.findUnique.mockResolvedValue({ id: 'project-1', language: 'cobol' });
+    mocks.getProviderHealth.mockResolvedValue(undefined);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/project-1/runs',
+      payload: { providerId: 'unknown' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Unknown provider: unknown' });
+    expect(mocks.getQuestionsForLanguage).not.toHaveBeenCalled();
+    expect(mocks.prisma.analysisRun.create).not.toHaveBeenCalled();
+    expect(mocks.generateJobs).not.toHaveBeenCalled();
+  });
+
+  it('rejects run creation when provider health is unavailable', async () => {
+    const health = {
+      providerId: 'bob',
+      name: 'IBM Bob Shell',
+      type: 'shell',
+      configured: false,
+      enabled: true,
+      available: false,
+      retryable: false,
+      reason: 'BOBSHELL_API_KEY not set',
+    };
+    mocks.prisma.project.findUnique.mockResolvedValue({ id: 'project-1', language: 'cobol' });
+    mocks.getProviderHealth.mockResolvedValue(health);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/project-1/runs',
+      payload: { providerId: 'bob' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({
+      error: 'Provider unavailable: bob',
+      provider: health,
+    });
+    expect(mocks.getQuestionsForLanguage).not.toHaveBeenCalled();
     expect(mocks.prisma.analysisRun.create).not.toHaveBeenCalled();
     expect(mocks.generateJobs).not.toHaveBeenCalled();
   });

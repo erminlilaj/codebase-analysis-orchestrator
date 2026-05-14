@@ -350,11 +350,14 @@ export interface AnalysisProvider {
   readonly id: string;
   readonly displayName: string;
   analyze(input: ProviderAnalysisInput): Promise<ProviderAnalysisResult>;
+  health?(): Promise<ProviderHealth>;
 }
 ```
 
 Receives the bundle, the question, and an isolated workspace path. Returns
 raw output + parsed answer + provider metadata (model id, tokens, etc).
+Providers may expose `health()` so the API can reject unavailable providers
+before jobs are generated.
 
 **Stub provider** ([StubProvider](src/providers/stub/StubProvider.ts)) returns
 deterministic canned answers; supports `delayMs` and `failureRate`
@@ -365,7 +368,9 @@ as a child process. `BobPromptBuilder` is implemented now and supports both
 runtime `@relative/path` references against the workspace and inline-content
 prompts for deterministic local tests. `BobOutputParser` is also implemented
 with fixture coverage for strict JSON, embedded JSON, experimental NDJSON,
-malformed output, empty stdout, stderr-only failure, and timeout metadata.
+malformed output, empty stdout, stderr-only failure, and timeout metadata. Bob
+readiness checks validate enablement, API key presence, command availability,
+and runtime limits before run creation generates jobs.
 
 ### Database-backed queue
 
@@ -492,6 +497,10 @@ All config is read once at startup from environment variables, validated by
 | `JOB_STALE_TIMEOUT_SECONDS` | `300` | Job is considered stale after this many seconds in `running` |
 | `BOBSHELL_API_KEY` | _empty_ | Required for Phase 12 Bob Shell provider |
 | `BOB_COMMAND` | `bob` | CLI binary name for Bob Shell |
+| `BOB_PROVIDER_ENABLED` | `false` | Enables Bob provider readiness and execution paths |
+| `BOB_TIMEOUT_MS` | `180000` | Bob Shell process timeout |
+| `BOB_MAX_BUFFER_MB` | `20` | Maximum Bob Shell stdout/stderr buffer size |
+| `BOB_MAX_INLINE_BYTES` | `51200` | Maximum source bytes allowed in inline prompt mode |
 
 Copy `.env.example` to `.env` to get started.
 
@@ -602,10 +611,10 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | Phase | Status | Notes |
 | --- | --- | --- |
 | 1–11: Project skeleton through workspace builder | Complete | |
-| 12: Bob Shell provider | In progress | Prompt builder and output parser implemented; readiness checks and shell adapter not yet implemented |
+| 12: Bob Shell provider | In progress | Prompt builder, output parser, and readiness checks implemented; health endpoints and shell adapter not yet implemented |
 | 13: REST API | Complete | 7 route modules |
 | 14: Exports (JSON/CSV/Markdown) | Complete | Streaming, paginated, backpressure-aware |
-| 15: Tests (broaden coverage) | Partial | 142 unit tests passing; integration tests pending |
+| 15: Tests (broaden coverage) | Partial | 154 unit tests passing; integration tests pending |
 | 16: Pilot workflow | Demonstrable now via `npm run e2e` (stub); real COBOL pilot waits on Phase 12 |
 | Extra: Terminal UI | Complete | Ink-based dashboard at `npm run tui` |
 | Extra: Web UI | Complete | React + Vite + Tailwind at `npm run web`, full feature set |

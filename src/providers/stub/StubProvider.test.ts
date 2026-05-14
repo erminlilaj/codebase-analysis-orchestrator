@@ -48,6 +48,22 @@ describe('StubProvider', () => {
     expect(provider.displayName).toMatch(/Stub/i);
   });
 
+  it('reports healthy provider status', async () => {
+    const provider = new StubProvider({ delayMs: 5, failureRate: 0.25 });
+    await expect(provider.health()).resolves.toMatchObject({
+      providerId: 'stub',
+      type: 'stub',
+      configured: true,
+      enabled: true,
+      available: true,
+      retryable: false,
+      details: {
+        delayMs: 5,
+        failureRate: 0.25,
+      },
+    });
+  });
+
   it('returns rawOutput referencing the question key and main file', async () => {
     const provider = new StubProvider();
     const result = await provider.analyze(makeInput());

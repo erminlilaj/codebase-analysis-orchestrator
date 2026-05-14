@@ -22,3 +22,15 @@ export type ProviderAnalysisResult = {
   parsedAnswer: unknown;
   metadata: Record<string, unknown>;
 };
+
+export type ProviderHealth = {
+  providerId: string;
+  name: string;
+  type: 'stub' | 'shell' | 'http' | 'local';
+  configured: boolean;
+  enabled: boolean;
+  available: boolean;
+  retryable: boolean;
+  reason?: string;
+  details?: Record<string, unknown>;
+};

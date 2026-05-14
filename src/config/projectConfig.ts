@@ -13,5 +13,9 @@ export const projectConfig = {
   bob: {
     command: env.BOB_COMMAND,
     apiKey: env.BOBSHELL_API_KEY,
+    enabled: env.BOB_PROVIDER_ENABLED,
+    timeoutMs: env.BOB_TIMEOUT_MS,
+    maxBufferMb: env.BOB_MAX_BUFFER_MB,
+    maxInlineBytes: env.BOB_MAX_INLINE_BYTES,
   },
 } as const;

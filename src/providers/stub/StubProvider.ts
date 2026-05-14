@@ -20,6 +20,22 @@ export class StubProvider implements AnalysisProvider {
 
   constructor(private readonly config: StubProviderConfig = {}) {}
 
+  async health() {
+    return {
+      providerId: this.id,
+      name: this.displayName,
+      type: 'stub' as const,
+      configured: true,
+      enabled: true,
+      available: true,
+      retryable: false,
+      details: {
+        delayMs: this.config.delayMs ?? 0,
+        failureRate: this.config.failureRate ?? 0,
+      },
+    };
+  }
+
   async analyze(input: ProviderAnalysisInput): Promise<ProviderAnalysisResult> {
     if (this.config.delayMs && this.config.delayMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, this.config.delayMs));

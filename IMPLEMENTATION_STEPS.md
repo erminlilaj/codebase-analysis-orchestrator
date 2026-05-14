@@ -551,6 +551,20 @@ marked as synthetic. Include malformed and partial output fixtures.
 Create the provider structure, but keep real execution disabled unless it is
 explicitly configured and ready.
 
+Status:
+
+- `[done]` Bob provider configuration is validated in `src/config/envSchema.ts`
+  and exposed through `projectConfig.bob`.
+- `[done]` Provider health shape and optional `AnalysisProvider.health()` are
+  implemented.
+- `[done]` `StubProvider` reports healthy provider status.
+- `[done]` Bob readiness checks live in
+  `src/providers/bob/BobProviderHealth.ts` and validate enablement, API key,
+  command availability, timeout, buffer, and inline-byte settings.
+- `[done]` Run creation rejects unknown or unavailable providers before jobs
+  are generated.
+- `[pending]` `BobShellProvider` execution adapter still needs to be added.
+
 Required configuration:
 
 ```text
@@ -687,10 +701,10 @@ Flag legend:
 3. `[P1][done]` Add `BobPromptBuilder`.
 4. `[P1][done]` Add `BobOutputParser`.
 5. `[P1][done]` Add fixture-based Bob output parser tests.
-6. `[P2][next]` Add Bob provider config validation and readiness checks.
-7. `[P2][pending]` Extend the provider interface with optional health support
+6. `[P2][done]` Add Bob provider config validation and readiness checks.
+7. `[P2][done]` Extend the provider interface with optional health support
    and make `StubProvider` report health.
-8. `[P2][pending]` Add provider health endpoints:
+8. `[P2][next]` Add provider health endpoints:
    `GET /api/providers` and `GET /api/providers/:id/health`.
 9. `[P3][pending]` Add disabled-by-default `BobShellProvider` scaffolding.
 10. `[P4][blocked]` Test real Bob Shell with an API key and save real CLI

@@ -3,6 +3,7 @@ import { prisma } from '../../db/prisma';
 import { scanDirectory } from '../../core/files/FileScanner';
 import { generateJobs } from '../../core/jobs/jobGenerator';
 import { getQuestionsForLanguage } from '../../core/questions/questionService';
+import { getProviderHealth } from '../../providers/providerRegistry';
 
 export async function projectRoutes(app: FastifyInstance): Promise<void> {
   app.get('/', async () => {
@@ -105,6 +106,17 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       if (!project) return reply.code(404).send({ error: 'Project not found' });
 
       const { providerId, questionIds, priority = 0 } = req.body;
+
+      const providerHealth = await getProviderHealth(providerId);
+      if (!providerHealth) {
+        return reply.code(400).send({ error: `Unknown provider: ${providerId}` });
+      }
+      if (!providerHealth.available) {
+        return reply.code(400).send({
+          error: `Provider unavailable: ${providerId}`,
+          provider: providerHealth,
+        });
+      }
 
       const qIds =
         questionIds ?? (await getQuestionsForLanguage(project.language)).map((q) => q.id);

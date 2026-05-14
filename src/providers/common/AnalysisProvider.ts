@@ -1,6 +1,11 @@
-import type { ProviderAnalysisInput, ProviderAnalysisResult, AnalysisQuestion } from './types';
+import type {
+  ProviderAnalysisInput,
+  ProviderAnalysisResult,
+  AnalysisQuestion,
+  ProviderHealth,
+} from './types';
 
-export type { ProviderAnalysisInput, ProviderAnalysisResult, AnalysisQuestion };
+export type { ProviderAnalysisInput, ProviderAnalysisResult, AnalysisQuestion, ProviderHealth };
 
 export interface AnalysisProvider {
   /** Stable identifier for this provider, e.g. "bob", "openai". */
@@ -14,4 +19,10 @@ export interface AnalysisProvider {
    * extraction the provider can produce.
    */
   analyze(input: ProviderAnalysisInput): Promise<ProviderAnalysisResult>;
+
+  /**
+   * Optional readiness check. API routes may use this before creating jobs so
+   * unavailable providers fail fast instead of producing a queue of doomed jobs.
+   */
+  health?(): Promise<ProviderHealth>;
 }
