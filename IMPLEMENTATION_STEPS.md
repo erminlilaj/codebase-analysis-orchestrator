@@ -219,7 +219,7 @@ main source file + resolved context files + one question + one provider
 5. Ensure job generation can handle thousands of files without creating all
    transient objects in memory at once.
 
-## Phase 9: Database-Backed Queue — [working]
+## Phase 9: Database-Backed Queue — [done]
 
 1. Implement job claiming with PostgreSQL row locking.
 2. Use `SELECT ... FOR UPDATE SKIP LOCKED` inside a transaction.
@@ -233,7 +233,7 @@ main source file + resolved context files + one question + one provider
 
 7. Add stale job recovery in `src/worker/recoverStaleJobs.ts`.
 
-## Phase 10: Worker — [pending]
+## Phase 10: Worker — [done]
 
 1. Add `src/worker/WorkerLoop.ts`.
 2. Add a separate worker entrypoint, for example:
@@ -255,7 +255,7 @@ npm run dev:worker
 4. Keep worker process separate from the API process.
 5. Make worker concurrency configurable.
 
-## Phase 11: Workspace Builder — [pending]
+## Phase 11: Workspace Builder — [done]
 
 1. Add `src/worker/WorkspaceBuilder.ts`.
 2. Create one workspace per job under `tmp/workspaces/`.
@@ -268,7 +268,7 @@ npm run dev:worker
 5. Do not expose unrelated repository files to providers.
 6. Clean up workspaces after completion unless debug retention is enabled.
 
-## Phase 12: Bob Shell Provider — [pending]
+## Phase 12: Bob Shell Provider — [next]
 
 1. Add Bob-specific code only under `src/providers/bob/`.
 2. Add:
@@ -355,7 +355,7 @@ bob --auth-method api-key -p "..."
 - answer
 - error state
 
-## Phase 15: Tests — [pending]
+## Phase 15: Tests — [partial]
 
 1. Add unit tests for:
 
@@ -422,13 +422,21 @@ where they are missing:
 This protects the orchestration architecture before adding a networked external
 provider.
 
-### Phase B: Add Bob Prompt Builder
+### Phase B: Add Bob Prompt Builder — [done]
 
 Create:
 
 ```text
 src/providers/bob/BobPromptBuilder.ts
 ```
+
+Status:
+
+- `[done]` `BobPromptBuilder.ts` supports `file-reference` and
+  `inline-content` prompt modes.
+- `[done]` Inline mode reads isolated workspace files and rejects over-limit
+  content without truncation.
+- `[done]` Unit coverage lives in `src/providers/bob/BobPromptBuilder.test.ts`.
 
 The prompt builder should take:
 
@@ -655,14 +663,27 @@ supports that status.
 
 ### Priority Order
 
-1. Keep `StubProvider` working.
-2. Add the fixture-repo integration test for the StubProvider pipeline.
-3. Add `BobPromptBuilder`.
-4. Add `BobOutputParser`.
-5. Add Bob provider config validation and readiness checks.
-6. Add fixture-based Bob tests.
-7. Add provider health endpoints.
-8. Only then test real Bob Shell with an API key.
+Flag legend:
+
+- `[done]`: already implemented and covered by the current test suite.
+- `[next]`: highest-priority item to implement next.
+- `[pending]`: planned after the current next item.
+- `[blocked]`: waits on Bob Shell installation, credentials, or real CLI output.
+
+1. `[P0][done]` Keep `StubProvider` working.
+2. `[P0][done]` Keep the fixture-repo stub pipeline demonstrable with
+   `npm run e2e`.
+3. `[P1][done]` Add `BobPromptBuilder`.
+4. `[P1][next]` Add `BobOutputParser`.
+5. `[P1][pending]` Add fixture-based Bob output parser tests.
+6. `[P2][pending]` Add Bob provider config validation and readiness checks.
+7. `[P2][pending]` Extend the provider interface with optional health support
+   and make `StubProvider` report health.
+8. `[P2][pending]` Add provider health endpoints:
+   `GET /api/providers` and `GET /api/providers/:id/health`.
+9. `[P3][pending]` Add disabled-by-default `BobShellProvider` scaffolding.
+10. `[P4][blocked]` Test real Bob Shell with an API key and save real CLI
+    output fixtures.
 
 ## Scale Requirements
 
