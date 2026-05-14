@@ -387,6 +387,194 @@ bob --auth-method api-key -p "..."
 7. Export JSON, CSV, and Markdown results.
 8. Review failures, unresolved dependencies, and parse quality.
 
+## Immediate Plan Before Real Bob Execution
+
+Research basis:
+
+- IBM documents IBMid/browser login for interactive sessions.
+- IBM documents API-key authentication for automation, CI/CD, scheduled
+  workflows, and non-interactive sessions.
+- IBM documents `@file` references for project context.
+- The public Bob Shell CLI docs list `--accept-license`, `--chat-mode`, and
+  `--hide-intermediary-output`, but do not currently settle the
+  `--output-format stream-json` contract. Treat stream parsing as a fixture-
+  and installed-CLI-verified behavior, not as a public-doc guarantee.
+
+### Phase A: Harden the Existing Stub Pipeline
+
+Before integrating real Bob execution, verify the whole internal path with
+`StubProvider`:
+
+```text
+scan -> bundle -> job generation -> worker -> answer storage -> export
+```
+
+Add or tighten tests for:
+
+- job status transitions
+- retry behavior
+- failed job behavior
+- stale running job recovery
+- answer persistence
+- export correctness
+
+This protects the orchestration architecture before adding a networked external
+provider.
+
+### Phase B: Add Bob Prompt Builder
+
+Create:
+
+```text
+src/providers/bob/BobPromptBuilder.ts
+```
+
+The prompt builder should take:
+
+- main file
+- context files
+- language
+- question
+- bundle metadata
+- unresolved dependencies
+- expected JSON schema
+- prompt file mode
+
+It must produce deterministic prompts and be covered by fixtures or snapshots.
+Do not put Bob prompt construction in the worker. The worker should only build
+the workspace and call the provider interface (`analyze` in the current code).
+
+Support two file modes from the beginning:
+
+```ts
+type PromptFileMode = 'file-reference' | 'inline-content';
+```
+
+File-reference mode:
+
+```text
+Main file: @PROGRAM.cbl
+Context file: @COPYBOOK.cpy
+```
+
+Inline-content mode:
+
+````text
+Main file content:
+```cobol
+...
+```
+````
+
+Defaults:
+
+- Bob runtime default: `file-reference`
+- local/unit-test default: `inline-content` or fixture content
+
+Large real jobs should prefer file-reference mode. Unit tests and parser
+fixtures should prefer inline content because they do not depend on Bob's file
+resolution behavior.
+
+### Phase C: Add Bob Output Parser
+
+Create:
+
+```text
+src/providers/bob/BobOutputParser.ts
+```
+
+The parser must always preserve raw output. It should handle:
+
+- strict JSON
+- JSON surrounded by explanatory text
+- stream JSON / NDJSON fixture output, if available
+- malformed JSON
+- empty output
+- stderr-only failure
+- timeout failure metadata
+
+Parser tests must use saved fixture outputs and must not require a real Bob
+installation or credentials.
+
+### Phase D: Add Disabled-By-Default Bob Provider Scaffolding
+
+Create the provider structure, but keep real execution disabled unless it is
+explicitly configured and ready.
+
+Required configuration:
+
+```text
+BOB_PROVIDER_ENABLED=false
+BOB_SHELL_PATH=bob
+BOBSHELL_API_KEY=...
+BOB_TIMEOUT_MS=180000
+BOB_MAX_BUFFER_MB=20
+```
+
+The codebase currently has `BOB_COMMAND`; either keep it as the implementation
+name or migrate deliberately to `BOB_SHELL_PATH`. Do not support two names
+silently unless there is a clear compatibility reason.
+
+Provider readiness should check:
+
+- provider is explicitly enabled
+- shell executable exists or resolves from `PATH`
+- `BOBSHELL_API_KEY` exists
+- timeout and buffer configuration are valid
+
+Readiness result shape:
+
+```ts
+type ProviderReadiness =
+  | { status: 'available' }
+  | {
+      status: 'unavailable';
+      reason: 'disabled' | 'missing_api_key' | 'command_not_found' | 'invalid_config';
+    };
+```
+
+Keep real Bob execution disabled unless all of these are true:
+
+1. `BOBSHELL_API_KEY` is present.
+2. `BOB_SHELL_PATH` or the chosen command config resolves.
+3. The Bob provider is explicitly enabled.
+
+### Phase E: Add Provider Health Endpoints
+
+Add:
+
+```text
+GET /api/providers
+GET /api/providers/:id/health
+```
+
+Example response:
+
+```json
+{
+  "name": "bob-shell",
+  "type": "shell",
+  "enabled": false,
+  "available": false,
+  "reason": "missing_api_key"
+}
+```
+
+These endpoints make provider debugging visible without starting a worker or
+waiting for a job to fail.
+
+### Priority Order
+
+1. Keep `StubProvider` working.
+2. Harden pipeline tests around jobs, retries, stale recovery, answer storage,
+   and exports.
+3. Add `BobPromptBuilder`.
+4. Add `BobOutputParser`.
+5. Add Bob provider config validation and readiness checks.
+6. Add fixture-based Bob tests.
+7. Add provider health endpoints.
+8. Only then test real Bob Shell with an API key.
+
 ## Scale Requirements
 
 Design every phase with thousands of files in mind:
