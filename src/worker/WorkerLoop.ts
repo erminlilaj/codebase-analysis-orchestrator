@@ -5,7 +5,7 @@ import type { AnalysisProvider } from '../providers/common/AnalysisProvider';
 import type { AnalysisBundle, SourceFile } from '../languages/common/types';
 import { claimNextJobs } from '../core/jobs/jobQueue';
 import { recoverStaleJobs } from './recoverStaleJobs';
-import { shouldRetry } from '../core/jobs/retryPolicy';
+import { classifyError, shouldRetry, type FailureKind } from '../core/jobs/retryPolicy';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -158,6 +158,13 @@ export class WorkerLoop {
         metadata: job.metadata as Record<string, unknown>,
       });
 
+      const softFailureKind = result.metadata?.failureKind as FailureKind | undefined;
+      if (softFailureKind) {
+        const reason = (result.metadata?.error as string) ?? `Provider returned failureKind: ${softFailureKind}`;
+        await this.handleFailure(job, new Error(reason), softFailureKind);
+        return;
+      }
+
       await prisma.analysisAnswer.create({
         data: {
           jobId: job.id,
@@ -179,17 +186,23 @@ export class WorkerLoop {
     }
   }
 
-  private async handleFailure(job: LoadedJob, error: unknown): Promise<void> {
+  private async handleFailure(
+    job: LoadedJob,
+    error: unknown,
+    failureKind?: FailureKind,
+  ): Promise<void> {
     const newAttempts = job.attempts + 1;
     const lastError = error instanceof Error ? error.message : String(error);
+    const kind = failureKind ?? classifyError(error);
 
-    if (shouldRetry(newAttempts, this.config.maxAttempts, error)) {
+    if (shouldRetry(newAttempts, this.config.maxAttempts, kind)) {
       await prisma.analysisJob.update({
         where: { id: job.id },
         data: {
           status: 'pending' as any,
           attempts: newAttempts,
           lastError,
+          failureKind: kind,
           claimedAt: null,
           startedAt: null,
         },
@@ -201,6 +214,7 @@ export class WorkerLoop {
           status: 'failed' as any,
           attempts: newAttempts,
           lastError,
+          failureKind: kind,
           finishedAt: new Date(),
         },
       });

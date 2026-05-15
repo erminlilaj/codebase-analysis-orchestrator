@@ -1,3 +1,5 @@
+export type FailureKind = 'transient' | 'parse_error' | 'non_retryable';
+
 const TRANSIENT_PATTERNS = [
   'econnrefused',
   'etimedout',
@@ -9,23 +11,43 @@ const TRANSIENT_PATTERNS = [
   'network',
 ];
 
-export function isTransientError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
+const PARSE_ERROR_PATTERNS = [
+  'parse error',
+  'parse_error',
+  'unexpected token',
+  'invalid json',
+  'no valid json',
+  'failed to parse',
+  'malformed output',
+];
+
+const PARSE_ERROR_MAX_ATTEMPTS = 2;
+
+export function classifyError(error: unknown): FailureKind {
+  if (!(error instanceof Error)) return 'non_retryable';
   const msg = error.message.toLowerCase();
-  return TRANSIENT_PATTERNS.some((p) => msg.includes(p));
+  if (TRANSIENT_PATTERNS.some((p) => msg.includes(p))) return 'transient';
+  if (PARSE_ERROR_PATTERNS.some((p) => msg.includes(p))) return 'parse_error';
+  return 'non_retryable';
+}
+
+export function isTransientError(error: unknown): boolean {
+  return classifyError(error) === 'transient';
 }
 
 /**
- * Returns true if the job should be retried given the current attempt count,
- * configured maximum, and the error that caused the failure.
+ * Returns true if the job should be retried.
  *
- * Only transient errors (network, timeout, etc.) are retried. Deterministic
- * errors (validation, missing config) are not.
+ * - transient: retry up to maxAttempts
+ * - parse_error: retry up to PARSE_ERROR_MAX_ATTEMPTS (2), independent of maxAttempts
+ * - non_retryable: never retry
  */
 export function shouldRetry(
   attempts: number,
   maxAttempts: number,
-  error: unknown,
+  failureKind: FailureKind,
 ): boolean {
-  return attempts < maxAttempts && isTransientError(error);
+  if (failureKind === 'non_retryable') return false;
+  if (failureKind === 'parse_error') return attempts < PARSE_ERROR_MAX_ATTEMPTS;
+  return attempts < maxAttempts;
 }

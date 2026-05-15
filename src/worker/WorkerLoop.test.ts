@@ -261,6 +261,7 @@ describe('WorkerLoop.processJob', () => {
       data: expect.objectContaining({
         status: 'pending',
         attempts: 1,
+        failureKind: 'transient',
         claimedAt: null,
         startedAt: null,
       }),
@@ -277,7 +278,7 @@ describe('WorkerLoop.processJob', () => {
 
     expect(mockJobUpdate).toHaveBeenCalledWith({
       where: { id: 'job-1' },
-      data: expect.objectContaining({ status: 'failed' }),
+      data: expect.objectContaining({ status: 'failed', failureKind: 'non_retryable' }),
     });
   });
 
@@ -291,7 +292,7 @@ describe('WorkerLoop.processJob', () => {
 
     expect(mockJobUpdate).toHaveBeenCalledWith({
       where: { id: 'job-1' },
-      data: expect.objectContaining({ status: 'failed', attempts: 3 }),
+      data: expect.objectContaining({ status: 'failed', attempts: 3, failureKind: 'transient' }),
     });
   });
 
@@ -305,7 +306,7 @@ describe('WorkerLoop.processJob', () => {
 
     expect(mockJobUpdate).toHaveBeenCalledWith({
       where: { id: 'job-1' },
-      data: expect.objectContaining({ status: 'failed' }),
+      data: expect.objectContaining({ status: 'failed', failureKind: 'non_retryable' }),
     });
     expect(mockAnswerCreate).not.toHaveBeenCalled();
   });
@@ -320,6 +321,69 @@ describe('WorkerLoop.processJob', () => {
 
     const updateCall = mockJobUpdate.mock.calls[0][0] as any;
     expect(updateCall.data.lastError).toBe('something bad happened');
+  });
+
+  it('handles parse_error soft failure from provider metadata: retries when attempts < 2', async () => {
+    mockFindUnique.mockResolvedValue(makeJob({ attempts: 0 }) as any);
+    const provider = makeProvider();
+    provider.analyze.mockResolvedValue({
+      rawOutput: '',
+      parsedAnswer: {},
+      metadata: { failureKind: 'parse_error', error: 'No valid JSON found' },
+    });
+
+    const worker = new WorkerLoop(provider, makeWorkspace(), config);
+    await worker.processJob('job-1');
+
+    expect(mockAnswerCreate).not.toHaveBeenCalled();
+    expect(mockJobUpdate).toHaveBeenCalledWith({
+      where: { id: 'job-1' },
+      data: expect.objectContaining({
+        status: 'pending',
+        failureKind: 'parse_error',
+        lastError: 'No valid JSON found',
+        claimedAt: null,
+        startedAt: null,
+      }),
+    });
+  });
+
+  it('marks as failed on parse_error soft failure when attempts >= 2', async () => {
+    mockFindUnique.mockResolvedValue(makeJob({ attempts: 1 }) as any);
+    const provider = makeProvider();
+    provider.analyze.mockResolvedValue({
+      rawOutput: '',
+      parsedAnswer: {},
+      metadata: { failureKind: 'parse_error', error: 'No valid JSON found' },
+    });
+
+    const worker = new WorkerLoop(provider, makeWorkspace(), config);
+    await worker.processJob('job-1');
+
+    expect(mockAnswerCreate).not.toHaveBeenCalled();
+    expect(mockJobUpdate).toHaveBeenCalledWith({
+      where: { id: 'job-1' },
+      data: expect.objectContaining({
+        status: 'failed',
+        failureKind: 'parse_error',
+      }),
+    });
+  });
+
+  it('uses fallback error message for soft failure when metadata has no error field', async () => {
+    mockFindUnique.mockResolvedValue(makeJob({ attempts: 0 }) as any);
+    const provider = makeProvider();
+    provider.analyze.mockResolvedValue({
+      rawOutput: '',
+      parsedAnswer: {},
+      metadata: { failureKind: 'timeout' },
+    });
+
+    const worker = new WorkerLoop(provider, makeWorkspace(), config);
+    await worker.processJob('job-1');
+
+    const updateCall = mockJobUpdate.mock.calls[0][0] as any;
+    expect(updateCall.data.lastError).toContain('timeout');
   });
 });
 

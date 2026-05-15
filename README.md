@@ -154,10 +154,20 @@ Stage by stage:
 | 9 | Store answer | `WorkerLoop` | `AnalysisAnswer` row with `rawOutput`, parsed JSON, `modelId`, `tokensUsed`; job → `status='completed'` |
 | 10 | Export | `POST /projects/:id/exports` | Streaming file under `exports/<projectId>/`, `Export` row pointing at it |
 
-**Failure path:** if the provider throws, `WorkerLoop.handleFailure` consults
-`retryPolicy.shouldRetry`. Transient errors flip the job back to `pending` and
-increment `attempts`; permanent errors or attempts past
-`JOB_MAX_ATTEMPTS` send the job to `failed` with `lastError` populated.
+**Failure path:** if the provider throws, `WorkerLoop.handleFailure` calls
+`retryPolicy.classifyError` to assign a `failureKind`, then consults
+`retryPolicy.shouldRetry`:
+
+| `failureKind` | Examples | Retry behaviour |
+|---|---|---|
+| `transient` | ECONNREFUSED, timeout, socket hang up | Re-queued up to `JOB_MAX_ATTEMPTS` |
+| `parse_error` | no valid JSON, malformed output | Re-queued up to **2** attempts (lower cap) |
+| `non_retryable` | invalid API key, provider disabled, missing workspace | Failed immediately, no retry |
+
+If the provider returns without throwing but includes `failureKind` in
+`result.metadata` (e.g. Bob Shell parse failures), the worker treats it as a
+soft failure — no `AnalysisAnswer` row is written and the same retry logic
+applies. The `failureKind` is stored on `AnalysisJob` and surfaced in exports.
 
 **Stale recovery:** `recoverStaleJobs` runs each tick — any job in `running`
 for longer than `JOB_STALE_TIMEOUT_SECONDS` (default 300s) is forced back to
@@ -231,7 +241,7 @@ src/
     bundles/bundleBuilder.ts    Builds and persists one bundle per file
     jobs/jobGenerator.ts        Cartesian product: bundles × questions
     jobs/jobQueue.ts            FOR UPDATE SKIP LOCKED claim
-    jobs/retryPolicy.ts         Transient vs permanent failure classification
+    jobs/retryPolicy.ts         Failure classification: transient / parse_error / non_retryable
     questions/questionService.ts
     exports/                    JSON/CSV/Markdown streaming formatters
       exportService.ts          Orchestrator + Export row creation
@@ -595,16 +605,40 @@ a remote API server.
 ## Development workflow
 
 ```sh
-npm test              # Vitest, 123 tests
+npm test              # Vitest unit tests (191 tests, 1 skipped)
 npm run typecheck     # tsc --noEmit, must be clean
-npm run e2e           # End-to-end smoke against live DB
+npm run e2e           # End-to-end smoke against live DB (requires Postgres)
 npm run build         # Production build to dist/
 ```
 
 Tests live alongside source (`X.ts` + `X.test.ts`). Prisma is mocked in unit
-tests via `vi.mock('../../db/prisma', ...)`. Anything that needs real Postgres
-behavior (concurrent queue claims, cascade deletes) belongs in the E2E or in
-a future integration test suite.
+tests via `vi.mock('../../db/prisma', ...)`.
+
+### Live DB integration test
+
+`src/core/jobs/jobQueue.integration.test.ts` verifies that concurrent workers
+never claim the same job using real Postgres `SKIP LOCKED` semantics. It is
+skipped by default to keep `npm test` fast and self-contained. To run it:
+
+```sh
+docker compose up -d           # Postgres must be running
+npm run db:deploy              # Apply migrations
+
+RUN_LIVE_DB_TESTS=1 npm test   # Enables the skipped integration test
+```
+
+### E2E smoke test
+
+`npm run e2e` drives the full pipeline end-to-end against a real database
+using `fastify.inject()` and the `StubProvider`:
+
+```
+scan → bundle → job generation → worker → answer storage → export
+```
+
+It creates a project from the fixture COBOL repo in `scripts/fixtures/cobol/`,
+generates 9 jobs (3 files × 3 questions), processes them with `StubProvider`,
+writes JSON/CSV/Markdown exports to `exports/<projectId>/`, then cleans up.
 
 Multi-agent coordination notes (worklog, decisions, proposals) live under
 [agents/](agents/) — see [AGENT.md](AGENT.md) for the protocol.
@@ -619,7 +653,7 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | 12: Bob Shell provider | In progress | Prompt builder, output parser, readiness checks, health endpoints, and shell adapter scaffold implemented; real Bob execution blocked on API key/CLI verification |
 | 13: REST API | Complete | 8 route modules |
 | 14: Exports (JSON/CSV/Markdown) | Complete | Streaming, paginated, backpressure-aware |
-| 15: Tests (broaden coverage) | Partial | 161 unit tests passing; integration tests pending |
+| 15: Tests (broaden coverage) | Partial | 191 unit tests passing; `exportService`, `recordIterator`, full `WorkerLoop` paths covered (incl. `failureKind` + soft-failure paths); live DB integration test skipped by default (`RUN_LIVE_DB_TESTS=1`) |
 | 16: Pilot workflow | Demonstrable now via `npm run e2e` (stub); real COBOL pilot waits on Phase 12 |
 | Extra: Terminal UI | Complete | Ink-based dashboard at `npm run tui` |
 | Extra: Web UI | Complete | React + Vite + Tailwind at `npm run web`, full feature set |
