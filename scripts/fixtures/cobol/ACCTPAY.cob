@@ -1,0 +1,30 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. ACCTPAY.
+       AUTHOR. THESIS-FIXTURE.
+
+       ENVIRONMENT DIVISION.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       COPY VENDOR.
+       01  WS-PAYMENT-AMOUNT      PIC S9(9)V99 COMP-3.
+       01  WS-EARLY-DISCOUNT      PIC S9(7)V99 COMP-3.
+       01  WS-DAYS-OUTSTANDING    PIC 9(3).
+
+       PROCEDURE DIVISION.
+       MAIN-PROCEDURE.
+           PERFORM PROCESS-PAYMENT
+           STOP RUN.
+
+       PROCESS-PAYMENT.
+           IF NOT VEND-ACTIVE
+               DISPLAY 'Vendor suspended: ' VEND-NAME
+               STOP RUN
+           END-IF
+           MOVE VEND-BALANCE-DUE TO WS-PAYMENT-AMOUNT
+           IF WS-DAYS-OUTSTANDING <= 10
+               COMPUTE WS-EARLY-DISCOUNT = WS-PAYMENT-AMOUNT * 0.02
+               SUBTRACT WS-EARLY-DISCOUNT FROM WS-PAYMENT-AMOUNT
+               DISPLAY '2% early payment discount applied'
+           END-IF
+           DISPLAY 'Payment to ' VEND-NAME ': ' WS-PAYMENT-AMOUNT.

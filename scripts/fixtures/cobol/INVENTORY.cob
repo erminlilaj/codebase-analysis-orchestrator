@@ -1,0 +1,25 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. INVENTORY.
+       AUTHOR. THESIS-FIXTURE.
+
+       ENVIRONMENT DIVISION.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       COPY PRODUCT.
+       01  WS-REORDER-FLAG        PIC X VALUE 'N'.
+           88  NEEDS-REORDER      VALUE 'Y'.
+       01  WS-REORDER-COUNT       PIC 9(4) VALUE ZERO.
+
+       PROCEDURE DIVISION.
+       MAIN-PROCEDURE.
+           PERFORM CHECK-STOCK
+           DISPLAY 'Reorder count: ' WS-REORDER-COUNT
+           STOP RUN.
+
+       CHECK-STOCK.
+           IF PROD-STOCK-QTY <= PROD-REORDER-QTY
+               MOVE 'Y' TO WS-REORDER-FLAG
+               ADD 1 TO WS-REORDER-COUNT
+               DISPLAY 'Reorder required for: ' PROD-NAME
+           END-IF.

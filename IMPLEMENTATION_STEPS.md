@@ -268,7 +268,7 @@ npm run dev:worker
 5. Do not expose unrelated repository files to providers.
 6. Clean up workspaces after completion unless debug retention is enabled.
 
-## Phase 12: Bob Shell Provider — [next]
+## Phase 12: Bob Shell Provider — [partial]
 
 1. Add Bob-specific code only under `src/providers/bob/`.
 2. Add:
@@ -355,7 +355,7 @@ bob --auth-method api-key -p "..."
 - answer
 - error state
 
-## Phase 15: Tests — [partial]
+## Phase 15: Tests — [done]
 
 1. Add unit tests for:
 
@@ -376,7 +376,7 @@ bob --auth-method api-key -p "..."
 4. The queue claim test should verify concurrent workers do not claim the same
    job.
 
-## Phase 16: Pilot Workflow — [pending]
+## Phase 16: Pilot Workflow — [done]
 
 1. Prepare a pilot repository or fixture with at least 10 COBOL files.
 2. Scan the repository.
@@ -400,7 +400,7 @@ Research basis:
   `--output-format stream-json` contract. Treat stream parsing as a fixture-
   and installed-CLI-verified behavior, not as a public-doc guarantee.
 
-### Phase A: Harden the Existing Stub Pipeline
+### Phase A: Harden the Existing Stub Pipeline — [done]
 
 Before integrating real Bob execution, verify the whole internal path with a
 single integration test against a fixture repo and `StubProvider`:
@@ -546,7 +546,7 @@ for normal CLI output, `--hide-intermediary-output`, and any attempted
 `stream-json` run. If no real outputs exist, create synthetic fixtures clearly
 marked as synthetic. Include malformed and partial output fixtures.
 
-### Phase D: Add Disabled-By-Default Bob Provider Scaffolding
+### Phase D: Add Disabled-By-Default Bob Provider Scaffolding — [partial]
 
 Create the provider structure, but keep real execution disabled unless it is
 explicitly configured and ready.
@@ -667,7 +667,7 @@ waiting for a job to fail. Report configured/enabled providers with live
 readiness. Also report known-but-disabled providers with static state, but do
 not run `health()` for disabled providers.
 
-### Phase F: Failure Classification
+### Phase F: Failure Classification — [done]
 
 Non-retryable failures:
 
@@ -697,6 +697,21 @@ revoked, mark the job failed with a non-retryable error. Do not requeue it as
 pending. Mark the parent run as blocked with a clear reason when the data model
 supports that status.
 
+Status:
+
+- `[done]` `FailureKind = 'transient' | 'parse_error' | 'non_retryable'` type
+  and `classifyError(error)` live in `src/core/jobs/retryPolicy.ts`.
+- `[done]` `shouldRetry` takes `FailureKind` directly; `parse_error` is capped
+  at 2 attempts independent of `maxAttempts`.
+- `[done]` `WorkerLoop.handleFailure` classifies errors and writes `failureKind`
+  to the `AnalysisJob` row on both retry and final-fail paths.
+- `[done]` `WorkerLoop.processJob` inspects `result.metadata.failureKind` for
+  soft failures returned by the provider (no throw); skips answer creation and
+  applies retry logic with the explicit kind.
+- `[done]` `failureKind String?` column added to `AnalysisJob` via migration
+  `20260515120000_add_failure_kind_to_analysis_job`.
+- `[done]` `failureKind` surfaced in `ExportRecord` via `recordIterator.ts`.
+
 ### Priority Order
 
 Flag legend:
@@ -718,7 +733,13 @@ Flag legend:
 8. `[P2][done]` Add provider health endpoints:
    `GET /api/providers` and `GET /api/providers/:id/health`.
 9. `[P3][done]` Add disabled-by-default `BobShellProvider` scaffolding.
-10. `[P4][next][blocked]` Test real Bob Shell with an API key and save real CLI
+10. `[P3][done]` Implement Phase F failure classification (`FailureKind`,
+    `classifyError`, `parse_error` cap, soft-failure path in worker, `failureKind`
+    in DB and exports).
+11. `[P3][done]` Broaden test coverage: `exportService`, `recordIterator`,
+    `WorkerLoop` failure paths, live DB integration tests for concurrent claim
+    and stale job recovery; CI workflow running all 194 tests with Postgres.
+12. `[P4][next][blocked]` Test real Bob Shell with an API key and save real CLI
     output fixtures.
 
 ## Scale Requirements

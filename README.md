@@ -539,10 +539,9 @@ npm run e2e
 ```
 
 `npm run e2e` exercises the entire system: creates a project, scans the
-fixture, builds bundles (including resolving `COPY CUSTOMER` to
-`CUSTOMER.cpy`), generates 9 jobs (3 files × 3 questions), processes them
-with the stub provider, writes JSON/CSV/Markdown exports to
-`exports/<projectId>/`, and cleans up.
+fixture repo (14 COBOL files), builds bundles, generates 42 jobs
+(14 files × 3 questions), processes them with the stub provider, writes
+JSON/CSV/Markdown exports to `exports/<projectId>/`, and cleans up.
 
 To run the API and worker as long-running processes:
 
@@ -605,7 +604,7 @@ a remote API server.
 ## Development workflow
 
 ```sh
-npm test              # Vitest unit tests (191 passing; add RUN_LIVE_DB_TESTS=1 for 194)
+npm test              # Vitest unit tests (193 passing; add RUN_LIVE_DB_TESTS=1 for 196)
 npm run typecheck     # tsc --noEmit, must be clean
 npm run e2e           # End-to-end smoke against live DB (requires Postgres)
 npm run build         # Production build to dist/
@@ -631,24 +630,95 @@ To run them:
 docker compose up -d           # Postgres must be running
 npm run db:deploy              # Apply migrations
 
-RUN_LIVE_DB_TESTS=1 npm test   # Enables both live DB suites (194 total)
+RUN_LIVE_DB_TESTS=1 npm test   # Enables both live DB suites (196 total)
 ```
 
 In CI the `RUN_LIVE_DB_TESTS=1` flag is set automatically — see
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
-### E2E smoke test
+### Pilot workflow (Phase 16)
 
-`npm run e2e` drives the full pipeline end-to-end against a real database
-using `fastify.inject()` and the `StubProvider`:
+`npm run e2e` is the Phase 16 pilot: it drives the full pipeline against a
+fixture COBOL repository using `fastify.inject()` and `StubProvider` — no
+Bob Shell API key required.
 
 ```
 scan → bundle → job generation → worker → answer storage → export
 ```
 
-It creates a project from the fixture COBOL repo in `scripts/fixtures/cobol/`,
-generates 9 jobs (3 files × 3 questions), processes them with `StubProvider`,
-writes JSON/CSV/Markdown exports to `exports/<projectId>/`, then cleans up.
+#### Fixture repository
+
+`scripts/fixtures/cobol/` contains 14 realistic COBOL files:
+
+| File | Type | Description |
+|---|---|---|
+| `PAYROLL.cob` | program | Net-pay calculation with tax deduction |
+| `BILLING.cob` | program | Customer billing with discount logic |
+| `INVENTORY.cob` | program | Stock-level check and reorder detection |
+| `ORDERPROC.cob` | program | Order total with loyalty discount |
+| `ACCTPAY.cob` | program | Vendor payment with early-payment discount |
+| `ACCTRECV.cob` | program | Customer late-payment penalty |
+| `TAXCALC.cob` | program | Tiered income-tax bracket calculation |
+| `REPORT.cob` | program | Month-end P&L report |
+| `EMPLOYEE.cob` | program | Employee salary raise application |
+| `GLPOSTING.cob` | program | General-ledger batch entry and balance check |
+| `CUSTOMER.cpy` | copybook | Customer record (shared by BILLING, ORDERPROC, ACCTRECV) |
+| `PRODUCT.cpy` | copybook | Product record (shared by INVENTORY, ORDERPROC) |
+| `VENDOR.cpy` | copybook | Vendor record (shared by ACCTPAY) |
+| `DATEUTIL.cpy` | copybook | Date utility fields (shared by REPORT, GLPOSTING) |
+
+The COBOL resolver parses `COPY` statements, resolves copybooks to known
+`SourceFile` records, and attaches them as context files in each bundle.
+Unresolved copybooks are stored in `bundle.metadata.unresolvedDependencies`.
+
+#### What the pilot produces
+
+With 14 files and 3 questions (`purpose`, `data-structures`, `business-rules`),
+the run generates **42 jobs**. All complete in ~3 seconds with `StubProvider`.
+
+Three export files are written to `exports/<projectId>/`:
+
+| Format | Size (approx.) | Content |
+|---|---|---|
+| `.json` | ~44 KB | Array of 42 `ExportRecord` objects — full traceability |
+| `.csv` | ~32 KB | Spreadsheet-friendly, one row per job |
+| `.md` | ~23 KB | Human-readable, grouped by run then file |
+
+Each record carries: `projectId`, `runId`, `jobId`, `jobStatus`, `mainFilePath`,
+`questionKey`, `providerId`, `attempts`, `lastError`, `failureKind`, `modelId`,
+`tokensUsed`, `rawOutput`, `parsedJson`, `answeredAt`.
+
+#### Running it
+
+```sh
+docker compose up -d    # Postgres must be running
+npm run db:deploy       # Apply migrations
+npm run db:seed         # Seed the 3 COBOL questions
+
+npm run e2e             # Full pilot — prints step-by-step progress
+```
+
+Expected output (abridged):
+
+```
+[1. Create project]  { name: 'e2e-stub-...', repoPath: '.../fixtures/cobol' }
+[2. Scan]            { filesFound: 14 }
+[3. Build bundles]   { bundlesCreated: 14 }
+[4. Questions]       [ 'purpose', 'data-structures', 'business-rules' ]
+[5. Create run]      { jobCount: 42 }
+[6. Waiting...]      {"completed":42}
+[7. Answers]         42 answers stored
+[8. Exports]
+   json     → exports/<id>/...-run.json     (44666 bytes)
+   csv      → exports/<id>/...-run.csv      (32310 bytes)
+   markdown → exports/<id>/...-run.md       (22759 bytes)
+[9. Cleanup]         done
+```
+
+The export files persist on disk after cleanup (project DB records are deleted;
+the files under `exports/` are not). Inspect them to review answer quality,
+unresolved dependency counts, and `failureKind` distribution before switching
+to a real provider.
 
 Multi-agent coordination notes (worklog, decisions, proposals) live under
 [agents/](agents/) — see [AGENT.md](AGENT.md) for the protocol.
@@ -663,8 +733,8 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | 12: Bob Shell provider | In progress | Prompt builder, output parser, readiness checks, health endpoints, and shell adapter scaffold implemented; real Bob execution blocked on API key/CLI verification |
 | 13: REST API | Complete | 8 route modules |
 | 14: Exports (JSON/CSV/Markdown) | Complete | Streaming, paginated, backpressure-aware |
-| 15: Tests (broaden coverage) | Done | 194 tests (191 unit + 3 live DB); `failureKind` + soft-failure paths covered; CI workflow runs all tests with Postgres service container |
-| 16: Pilot workflow | Demonstrable now via `npm run e2e` (stub); real COBOL pilot waits on Phase 12 |
+| 15: Tests (broaden coverage) | Done | 196 tests (193 unit + 3 live DB); `failureKind` + soft-failure paths, exporter field coverage; CI workflow runs all tests with Postgres service container |
+| 16: Pilot workflow | Done | 14-file COBOL fixture repo; `npm run e2e` produces 42 jobs, 42 answers, JSON/CSV/Markdown exports in ~3 s with `StubProvider` |
 | Extra: Terminal UI | Complete | Ink-based dashboard at `npm run tui` |
 | Extra: Web UI | Complete | React + Vite + Tailwind at `npm run web`, full feature set |
 

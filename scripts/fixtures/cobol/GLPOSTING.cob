@@ -1,0 +1,40 @@
+       IDENTIFICATION DIVISION.
+       PROGRAM-ID. GLPOSTING.
+       AUTHOR. THESIS-FIXTURE.
+
+       ENVIRONMENT DIVISION.
+
+       DATA DIVISION.
+       WORKING-STORAGE SECTION.
+       COPY DATEUTIL.
+       01  WS-GL-ENTRY.
+           05  GL-ACCOUNT-NO      PIC X(10).
+           05  GL-DESCRIPTION     PIC X(40).
+           05  GL-DEBIT-AMT       PIC S9(11)V99 COMP-3.
+           05  GL-CREDIT-AMT      PIC S9(11)V99 COMP-3.
+           05  GL-POSTING-DATE    PIC X(10).
+       01  WS-BATCH-TOTAL-DR      PIC S9(13)V99 COMP-3 VALUE ZERO.
+       01  WS-BATCH-TOTAL-CR      PIC S9(13)V99 COMP-3 VALUE ZERO.
+       01  WS-BALANCED            PIC X VALUE 'N'.
+           88  BATCH-BALANCED     VALUE 'Y'.
+
+       PROCEDURE DIVISION.
+       MAIN-PROCEDURE.
+           PERFORM POST-ENTRY
+           PERFORM VERIFY-BALANCE
+           STOP RUN.
+
+       POST-ENTRY.
+           ADD GL-DEBIT-AMT  TO WS-BATCH-TOTAL-DR
+           ADD GL-CREDIT-AMT TO WS-BATCH-TOTAL-CR
+           DISPLAY 'Posted: ' GL-ACCOUNT-NO ' ' GL-DESCRIPTION.
+
+       VERIFY-BALANCE.
+           IF WS-BATCH-TOTAL-DR = WS-BATCH-TOTAL-CR
+               MOVE 'Y' TO WS-BALANCED
+               DISPLAY 'Batch balanced. Total: ' WS-BATCH-TOTAL-DR
+           ELSE
+               DISPLAY 'BATCH OUT OF BALANCE'
+               DISPLAY 'DR: ' WS-BATCH-TOTAL-DR
+               DISPLAY 'CR: ' WS-BATCH-TOTAL-CR
+           END-IF.
