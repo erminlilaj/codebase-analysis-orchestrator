@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: codebase_analysis
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d codebase_analysis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/codebase_analysis
+      RUN_LIVE_DB_TESTS: "1"
+      # Stub values — real provider not needed for tests
+      BOBSHELL_API_KEY: ""
+      BOB_COMMAND: bob
+      WORKSPACE_ROOT: tmp/workspaces
+      EXPORT_ROOT: exports
+      JOB_MAX_ATTEMPTS: "3"
+      JOB_STALE_TIMEOUT_SECONDS: "300"
+      WORKER_POLL_INTERVAL_MS: "2000"
+      WORKER_CONCURRENCY: "4"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply database migrations
+        run: npx prisma migrate deploy
+
+      - name: Run tests
+        run: npm test

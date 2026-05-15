@@ -605,7 +605,7 @@ a remote API server.
 ## Development workflow
 
 ```sh
-npm test              # Vitest unit tests (191 tests, 1 skipped)
+npm test              # Vitest unit tests (191 passing; add RUN_LIVE_DB_TESTS=1 for 194)
 npm run typecheck     # tsc --noEmit, must be clean
 npm run e2e           # End-to-end smoke against live DB (requires Postgres)
 npm run build         # Production build to dist/
@@ -614,18 +614,28 @@ npm run build         # Production build to dist/
 Tests live alongside source (`X.ts` + `X.test.ts`). Prisma is mocked in unit
 tests via `vi.mock('../../db/prisma', ...)`.
 
-### Live DB integration test
+### Live DB integration tests
 
-`src/core/jobs/jobQueue.integration.test.ts` verifies that concurrent workers
-never claim the same job using real Postgres `SKIP LOCKED` semantics. It is
-skipped by default to keep `npm test` fast and self-contained. To run it:
+`src/core/jobs/jobQueue.integration.test.ts` contains two suites that require a
+real Postgres instance:
+
+| Suite | What it verifies |
+|---|---|
+| `claimNextJobs live Postgres concurrency` | Concurrent workers never double-claim the same job (`SKIP LOCKED`) |
+| `recoverStaleJobs live Postgres` | Only jobs with a sufficiently old `updatedAt` are flipped back to `pending`; fresh running jobs are left alone |
+
+Both suites are skipped by default to keep `npm test` fast and self-contained.
+To run them:
 
 ```sh
 docker compose up -d           # Postgres must be running
 npm run db:deploy              # Apply migrations
 
-RUN_LIVE_DB_TESTS=1 npm test   # Enables the skipped integration test
+RUN_LIVE_DB_TESTS=1 npm test   # Enables both live DB suites (194 total)
 ```
+
+In CI the `RUN_LIVE_DB_TESTS=1` flag is set automatically — see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ### E2E smoke test
 
@@ -653,7 +663,7 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | 12: Bob Shell provider | In progress | Prompt builder, output parser, readiness checks, health endpoints, and shell adapter scaffold implemented; real Bob execution blocked on API key/CLI verification |
 | 13: REST API | Complete | 8 route modules |
 | 14: Exports (JSON/CSV/Markdown) | Complete | Streaming, paginated, backpressure-aware |
-| 15: Tests (broaden coverage) | Partial | 191 unit tests passing; `exportService`, `recordIterator`, full `WorkerLoop` paths covered (incl. `failureKind` + soft-failure paths); live DB integration test skipped by default (`RUN_LIVE_DB_TESTS=1`) |
+| 15: Tests (broaden coverage) | Done | 194 tests (191 unit + 3 live DB); `failureKind` + soft-failure paths covered; CI workflow runs all tests with Postgres service container |
 | 16: Pilot workflow | Demonstrable now via `npm run e2e` (stub); real COBOL pilot waits on Phase 12 |
 | Extra: Terminal UI | Complete | Ink-based dashboard at `npm run tui` |
 | Extra: Web UI | Complete | React + Vite + Tailwind at `npm run web`, full feature set |
