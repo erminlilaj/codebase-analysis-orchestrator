@@ -6,6 +6,7 @@ import type { AnalysisBundle, SourceFile } from '../languages/common/types';
 import { claimNextJobs } from '../core/jobs/jobQueue';
 import { recoverStaleJobs } from './recoverStaleJobs';
 import { classifyError, shouldRetry, type FailureKind } from '../core/jobs/retryPolicy';
+import { updateRunStatus } from '../core/runs/updateRunStatus';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -179,6 +180,7 @@ export class WorkerLoop {
         where: { id: jobId },
         data: { status: 'completed' as any, finishedAt: new Date() },
       });
+      await updateRunStatus(job.runId);
     } catch (err) {
       await this.handleFailure(job, err);
     } finally {
@@ -218,6 +220,7 @@ export class WorkerLoop {
           finishedAt: new Date(),
         },
       });
+      await updateRunStatus(job.runId);
     }
   }
 }

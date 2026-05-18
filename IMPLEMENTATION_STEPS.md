@@ -742,6 +742,249 @@ Flag legend:
 12. `[P4][next][blocked]` Test real Bob Shell with an API key and save real CLI
     output fixtures.
 
+## Phase G: Run Completion Status — [done]
+
+Track when a run finishes and expose that state via API and exports.
+
+### Motivation
+
+Currently a run has no terminal status. Callers must query all jobs and derive
+whether the run is done. This makes the system feel incomplete and forces
+clients to implement aggregation logic themselves.
+
+### Schema changes
+
+Add a `status` field to `AnalysisRun`:
+
+```prisma
+model AnalysisRun {
+  ...
+  status     String   @default("running")   // running | completed | failed | blocked
+  finishedAt DateTime?
+}
+```
+
+Add a migration:
+
+```sql
+ALTER TABLE "AnalysisRun" ADD COLUMN "status" TEXT NOT NULL DEFAULT 'running';
+ALTER TABLE "AnalysisRun" ADD COLUMN "finishedAt" TIMESTAMP(3);
+```
+
+### Status rules
+
+| Run status  | Condition                                              |
+|-------------|--------------------------------------------------------|
+| `running`   | At least one job is still `queued`, `running`, or `retrying` |
+| `completed` | All jobs are `succeeded`                               |
+| `failed`    | All jobs are terminal; at least one is `failed`        |
+| `blocked`   | All jobs are terminal; at least one is `failed` with `non_retryable` kind |
+
+### Implementation
+
+1. Add `src/core/runs/updateRunStatus.ts`:
+   - Accept `runId`.
+   - Count jobs by status in a single aggregation query.
+   - Derive the run status from the counts using the rules above.
+   - Write `status` and `finishedAt` (when terminal) to `AnalysisRun`.
+   - Return the new status.
+
+2. Call `updateRunStatus(runId)` from `WorkerLoop.handleFailure` and
+   `WorkerLoop.processJob` after every terminal job outcome (succeeded, failed).
+
+3. Expose on the API:
+   - `GET /runs/:runId` — include `status` and `finishedAt` in the response.
+   - `GET /projects/:projectId/runs` — include `status` in list items.
+
+4. Add to `ExportRecord` and all three export formats (JSON, CSV, Markdown).
+
+5. Unit tests:
+   - All jobs succeeded → `completed`.
+   - Mix of succeeded and failed → `failed`.
+   - Any `non_retryable` failure → `blocked`.
+   - Still-queued jobs → `running`.
+
+6. Integration test: run a full stub pipeline and assert the run transitions
+   from `running` to `completed` once all jobs finish.
+
+---
+
+## Phase H: Question Versioning — [pending]
+
+Prevent stale answers when a question is edited after jobs have been generated.
+
+### Motivation
+
+If a question's text changes, existing answers were produced against a different
+prompt. Without versioning there is no way to tell which answers are current.
+
+### Schema changes
+
+Add a `version` field to `Question` and record it on each job:
+
+```prisma
+model Question {
+  ...
+  version Int @default(1)
+}
+
+model AnalysisJob {
+  ...
+  questionVersion Int @default(1)
+}
+```
+
+Add a migration:
+
+```sql
+ALTER TABLE "Question" ADD COLUMN "version" INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE "AnalysisJob" ADD COLUMN "questionVersion" INTEGER NOT NULL DEFAULT 1;
+```
+
+### Implementation
+
+1. Increment `version` on every `PATCH /questions/:id` that changes `text`,
+   `key`, or `language`. Never reset to 1; always `version + 1`.
+
+2. Record `questionVersion` at job generation time by reading
+   `question.version` and writing it to `AnalysisJob.questionVersion`.
+
+3. Add a staleness flag to `ExportRecord`:
+
+```ts
+stale: boolean;  // true when job.questionVersion < question.version
+```
+
+Compute it in `recordIterator.ts` by joining `AnalysisJob` with `Question`.
+
+4. Surface `stale` in all three export formats.
+
+5. Add `GET /runs/:runId/stale-jobs` — returns jobs whose
+   `questionVersion < question.version` so callers can decide to re-run.
+
+6. Unit tests:
+   - Job generated at version 1; question updated to version 2 → `stale: true`.
+   - Job generated at version 2; question at version 2 → `stale: false`.
+   - `PATCH /questions/:id` with unchanged text → version does not increment.
+
+---
+
+## Phase I: Re-run Failed Jobs — [pending]
+
+Reset failed jobs back to `queued` without regenerating the entire run.
+
+### Motivation
+
+When jobs fail due to transient errors or a temporary Bob outage, regenerating
+the whole run wastes time and creates duplicate answer rows. A targeted re-run
+path is safer and faster.
+
+### Implementation
+
+1. Add `POST /runs/:runId/retry` with an optional body:
+
+```json
+{ "jobIds": ["id1", "id2"] }
+```
+
+If `jobIds` is omitted, retry all failed jobs in the run.
+
+2. In the handler:
+   - Validate that each job belongs to `runId`.
+   - Only accept jobs with status `failed`.
+   - Reset each job: `status = queued`, `attempts = 0`, `lastError = null`,
+     `failureKind = null`, `claimedAt = null`.
+   - If run status is `failed` or `blocked`, reset it to `running` and clear
+     `finishedAt`.
+
+3. Add `src/core/jobs/retryJobs.ts` with the reset logic, accepting a list of
+   job IDs and a Prisma client.
+
+4. Unit tests:
+   - Retrying a `failed` job resets all fields correctly.
+   - Retrying a `succeeded` job returns HTTP 400.
+   - Retrying with an empty `jobIds` array retries all failed jobs in the run.
+   - Run status is reset to `running` when at least one job is re-queued.
+
+5. Integration test: fail a job, call retry, assert it transitions back to
+   `queued` and eventually `succeeded` after the worker processes it.
+
+---
+
+## Phase J: Answer Diffing — [pending]
+
+Surface what changed between two runs of the same questions against the same
+project.
+
+### Motivation
+
+When questions are re-run (after a question edit, a Bob update, or a code
+change), it is useful to see which answers changed rather than reading every
+answer manually.
+
+### Implementation
+
+1. Add `GET /projects/:projectId/diff?runA=:runId&runB=:runId`:
+   - For each `(bundleId, questionKey)` pair present in both runs, compare
+     `rawOutput` and `parsedJson`.
+   - Return a diff summary per pair:
+
+```json
+{
+  "changed": [
+    {
+      "bundleId": "...",
+      "questionKey": "purpose",
+      "runA": { "jobId": "...", "rawOutput": "..." },
+      "runB": { "jobId": "...", "rawOutput": "..." }
+    }
+  ],
+  "unchanged": [...],
+  "onlyInA": [...],
+  "onlyInB": [...]
+}
+```
+
+2. Add `src/core/runs/diffRuns.ts`:
+   - Accept `runIdA`, `runIdB`, and a Prisma client.
+   - Load answers for both runs grouped by `(bundleId, questionKey)`.
+   - Return the four categories above.
+   - Do not load all answers into memory at once; process in pages.
+
+3. Add the route in `src/api/routes/runs.routes.ts`.
+
+4. Unit tests:
+   - Two identical answers → `unchanged`.
+   - Answer present in A but not B → `onlyInA`.
+   - Different `rawOutput` → `changed`.
+   - Empty runs → all categories empty.
+
+---
+
+## Proposed Features — [proposed]
+
+The following features are not planned for immediate implementation but are
+worth considering for future iterations:
+
+- **Progress streaming** — SSE endpoint (`GET /runs/:runId/progress`) for live
+  job completion updates without polling. Eliminates the need for clients to
+  poll `/runs/:runId/jobs`.
+
+- **Multi-language support** — add a second language resolver (e.g. Java or
+  Python) to prove the architecture is truly generic. The resolver and
+  question set would live under `src/languages/java/` following the same
+  pattern as the COBOL resolver.
+
+- **Worker rate limiting** — configurable delay between Bob Shell invocations
+  to avoid hitting API rate limits. Controlled via `WORKER_JOB_DELAY_MS` env
+  var; default 0.
+
+- **Export scheduling** — auto-trigger a full export when a run transitions to
+  `completed`. Controlled by a per-run flag (`autoExport: true`) set at run
+  creation time.
+
+---
+
 ## Scale Requirements
 
 Design every phase with thousands of files in mind:

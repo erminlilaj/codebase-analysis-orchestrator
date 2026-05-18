@@ -20,16 +20,22 @@ vi.mock('./recoverStaleJobs', () => ({
   recoverStaleJobs: vi.fn(),
 }));
 
+vi.mock('../core/runs/updateRunStatus', () => ({
+  updateRunStatus: vi.fn(),
+}));
+
 import { WorkerLoop } from './WorkerLoop';
 import { prisma } from '../db/prisma';
 import { claimNextJobs } from '../core/jobs/jobQueue';
 import { recoverStaleJobs } from './recoverStaleJobs';
+import { updateRunStatus } from '../core/runs/updateRunStatus';
 
 const mockFindUnique = vi.mocked(prisma.analysisJob.findUnique);
 const mockJobUpdate = vi.mocked(prisma.analysisJob.update);
 const mockAnswerCreate = vi.mocked(prisma.analysisAnswer.create);
 const mockClaimNextJobs = vi.mocked(claimNextJobs);
 const mockRecoverStaleJobs = vi.mocked(recoverStaleJobs);
+const mockUpdateRunStatus = vi.mocked(updateRunStatus);
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -99,6 +105,7 @@ beforeEach(() => {
   mockAnswerCreate.mockResolvedValue({} as any);
   mockClaimNextJobs.mockResolvedValue([]);
   mockRecoverStaleJobs.mockResolvedValue(0);
+  mockUpdateRunStatus.mockResolvedValue(undefined);
 });
 
 describe('WorkerLoop.processJob', () => {
@@ -132,6 +139,7 @@ describe('WorkerLoop.processJob', () => {
       where: { id: 'job-1' },
       data: expect.objectContaining({ status: 'completed' }),
     });
+    expect(mockUpdateRunStatus).toHaveBeenCalledWith('run-1');
   });
 
   it('passes reconstructed main and context files to the provider', async () => {
@@ -266,6 +274,7 @@ describe('WorkerLoop.processJob', () => {
         startedAt: null,
       }),
     });
+    expect(mockUpdateRunStatus).not.toHaveBeenCalled();
   });
 
   it('marks as failed on deterministic error regardless of attempts left', async () => {
@@ -280,6 +289,7 @@ describe('WorkerLoop.processJob', () => {
       where: { id: 'job-1' },
       data: expect.objectContaining({ status: 'failed', failureKind: 'non_retryable' }),
     });
+    expect(mockUpdateRunStatus).toHaveBeenCalledWith('run-1');
   });
 
   it('marks as failed when max attempts exhausted even for transient error', async () => {
@@ -294,6 +304,7 @@ describe('WorkerLoop.processJob', () => {
       where: { id: 'job-1' },
       data: expect.objectContaining({ status: 'failed', attempts: 3, failureKind: 'transient' }),
     });
+    expect(mockUpdateRunStatus).toHaveBeenCalledWith('run-1');
   });
 
   it('marks as failed on workspace build error (non-retryable message)', async () => {

@@ -733,8 +733,9 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | 12: Bob Shell provider | In progress | Prompt builder, output parser, readiness checks, health endpoints, and shell adapter scaffold implemented; real Bob execution blocked on API key/CLI verification |
 | 13: REST API | Complete | 8 route modules |
 | 14: Exports (JSON/CSV/Markdown) | Complete | Streaming, paginated, backpressure-aware |
-| 15: Tests (broaden coverage) | Done | 196 tests (193 unit + 3 live DB); `failureKind` + soft-failure paths, exporter field coverage; CI workflow runs all tests with Postgres service container |
+| 15: Tests (broaden coverage) | Done | 200 tests (197 unit + 3 live DB); `failureKind` + soft-failure paths, exporter field coverage; CI workflow runs all tests with Postgres service container |
 | 16: Pilot workflow | Done | 14-file COBOL fixture repo; `npm run e2e` produces 42 jobs, 42 answers, JSON/CSV/Markdown exports in ~3 s with `StubProvider` |
+| G: Run completion status | Done | `AnalysisRun.status` transitions to `completed`, `failed`, or `blocked` when all jobs finish; `runStatus` surfaced in all export formats |
 | Extra: Terminal UI | Complete | Ink-based dashboard at `npm run tui` |
 | Extra: Web UI | Complete | React + Vite + Tailwind at `npm run web`, full feature set |
 
