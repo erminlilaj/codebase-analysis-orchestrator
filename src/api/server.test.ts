@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
     },
   },
   generateJobs: vi.fn(),
+  retryJobs: vi.fn(),
   getQuestionsForLanguage: vi.fn(),
   getProviderHealth: vi.fn(),
   listProviderHealth: vi.fn(),
@@ -50,6 +51,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../db/prisma', () => ({ prisma: mocks.prisma }));
 vi.mock('../core/jobs/jobGenerator', () => ({ generateJobs: mocks.generateJobs }));
+vi.mock('../core/jobs/retryJobs', () => ({ retryJobs: mocks.retryJobs }));
 vi.mock('../core/questions/questionService', () => ({
   getQuestionsForLanguage: mocks.getQuestionsForLanguage,
 }));
@@ -258,6 +260,64 @@ describe('buildServer API routes', () => {
 
     expect(res.statusCode).toBe(404);
     expect(res.json()).toEqual({ error: 'Run not found' });
+  });
+
+  it('returns 404 when retrying jobs for an unknown run', async () => {
+    mocks.prisma.analysisRun.findUnique.mockResolvedValue(null);
+
+    const res = await app.inject({ method: 'POST', url: '/api/runs/missing/retry', payload: {} });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: 'Run not found' });
+    expect(mocks.retryJobs).not.toHaveBeenCalled();
+  });
+
+  it('rejects retrying a job that is not a failed job in the run', async () => {
+    mocks.prisma.analysisRun.findUnique.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    mocks.prisma.analysisJob.findMany.mockResolvedValue([{ id: 'job-failed' }]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/runs/run-1/retry',
+      payload: { jobIds: ['job-completed'] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({
+      error: 'Some job IDs are not failed jobs in this run',
+      invalidJobIds: ['job-completed'],
+    });
+    expect(mocks.retryJobs).not.toHaveBeenCalled();
+  });
+
+  it('retries all failed jobs when jobIds is omitted', async () => {
+    mocks.prisma.analysisRun.findUnique.mockResolvedValue({ id: 'run-1', status: 'failed' });
+    mocks.prisma.analysisJob.findMany.mockResolvedValue([{ id: 'job-1' }, { id: 'job-2' }]);
+
+    const res = await app.inject({ method: 'POST', url: '/api/runs/run-1/retry', payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ retriedJobIds: ['job-1', 'job-2'], count: 2 });
+    expect(mocks.retryJobs).toHaveBeenCalledWith('run-1', ['job-1', 'job-2']);
+  });
+
+  it('retries only the requested failed jobs', async () => {
+    mocks.prisma.analysisRun.findUnique.mockResolvedValue({ id: 'run-1', status: 'blocked' });
+    mocks.prisma.analysisJob.findMany.mockResolvedValue([
+      { id: 'job-1' },
+      { id: 'job-2' },
+      { id: 'job-3' },
+    ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/runs/run-1/retry',
+      payload: { jobIds: ['job-2'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ retriedJobIds: ['job-2'], count: 1 });
+    expect(mocks.retryJobs).toHaveBeenCalledWith('run-1', ['job-2']);
   });
 
   it('increments question version when the text changes', async () => {

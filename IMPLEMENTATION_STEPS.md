@@ -869,7 +869,7 @@ Compute it in `recordIterator.ts` by joining `AnalysisJob` with `Question`.
 
 ---
 
-## Phase I: Re-run Failed Jobs — [pending]
+## Phase I: Re-run Failed Jobs — [done]
 
 Reset failed jobs back to `queued` without regenerating the entire run.
 

@@ -486,6 +486,7 @@ routes live under `/projects/:id/...`; run-scoped routes under `/runs/:runId/...
 | `GET` | `/runs/:runId/jobs` | List jobs (optional `?status=`) |
 | `GET` | `/runs/:runId/stale-jobs` | List jobs whose question changed after generation |
 | `GET` | `/runs/:runId/answers` | List answers for run |
+| `POST` | `/runs/:runId/retry` | Re-queue failed jobs `{ jobIds? }` — all failed jobs if omitted |
 | `GET` | `/jobs/:id` | Get job with question + answer |
 | `GET` | `/jobs/:id/answer` | Get just the answer |
 | `GET` | `/projects/:id/exports` | List past exports |
@@ -605,7 +606,7 @@ a remote API server.
 ## Development workflow
 
 ```sh
-npm test              # Vitest unit tests (210 passing; add RUN_LIVE_DB_TESTS=1 for 213)
+npm test              # Vitest unit tests (217 passing; add RUN_LIVE_DB_TESTS=1 for 220)
 npm run typecheck     # tsc --noEmit, must be clean
 npm run e2e           # End-to-end smoke against live DB (requires Postgres)
 npm run build         # Production build to dist/
@@ -631,7 +632,7 @@ To run them:
 docker compose up -d           # Postgres must be running
 npm run db:deploy              # Apply migrations
 
-RUN_LIVE_DB_TESTS=1 npm test   # Enables both live DB suites (213 total)
+RUN_LIVE_DB_TESTS=1 npm test   # Enables both live DB suites (220 total)
 ```
 
 In CI the `RUN_LIVE_DB_TESTS=1` flag is set automatically — see
@@ -734,10 +735,11 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | 12: Bob Shell provider | In progress | Prompt builder, output parser, readiness checks, health endpoints, and shell adapter scaffold implemented; real Bob execution blocked on API key/CLI verification |
 | 13: REST API | Complete | 8 route modules |
 | 14: Exports (JSON/CSV/Markdown) | Complete | Streaming, paginated, backpressure-aware |
-| 15: Tests (broaden coverage) | Done | 213 tests (210 unit + 3 live DB); `failureKind` + soft-failure paths, exporter field coverage; CI workflow runs all tests with Postgres service container |
+| 15: Tests (broaden coverage) | Done | 220 tests (217 unit + 3 live DB); `failureKind` + soft-failure paths, exporter field coverage; CI workflow runs all tests with Postgres service container |
 | 16: Pilot workflow | Done | 14-file COBOL fixture repo; `npm run e2e` produces 42 jobs, 42 answers, JSON/CSV/Markdown exports in ~3 s with `StubProvider` |
 | G: Run completion status | Done | `AnalysisRun.status` transitions to `completed`, `failed`, or `blocked` when all jobs finish; `runStatus` surfaced in all export formats |
 | H: Question versioning | Done | `Question.version` bumped on edit; jobs record `questionVersion`; `stale` flag in all exports; `GET /runs/:runId/stale-jobs` lists outdated jobs |
+| I: Re-run failed jobs | Done | `POST /runs/:runId/retry` resets failed jobs to `pending` and reopens the run; optional `jobIds` body scopes the retry |
 | Extra: Terminal UI | Complete | Ink-based dashboard at `npm run tui` |
 | Extra: Web UI | Complete | React + Vite + Tailwind at `npm run web`, full feature set |
 
