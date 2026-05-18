@@ -273,6 +273,10 @@ src/
       BobShellProvider.ts       Disabled-by-default shell adapter scaffold
       BobPromptBuilder.ts       Deterministic Bob prompts for file refs/inline fixtures
       BobOutputParser.ts        Parses Bob stdout/stderr into structured answers/metadata
+    opencode/                   OpenCode CLI provider
+      OpenCodeShellProvider.ts  Disabled-by-default CLI adapter
+      OpenCodePromptBuilder.ts  Deterministic OpenCode prompts for file refs/inline fixtures
+      OpenCodeOutputParser.ts   Parses OpenCode stdout/stderr into structured answers/metadata
     stub/
       StubProvider.ts           Deterministic canned answers for testing
 
@@ -518,6 +522,13 @@ All config is read once at startup from environment variables, validated by
 | `BOB_TIMEOUT_MS` | `180000` | Bob Shell process timeout |
 | `BOB_MAX_BUFFER_MB` | `20` | Maximum Bob Shell stdout/stderr buffer size |
 | `BOB_MAX_INLINE_BYTES` | `51200` | Maximum source bytes allowed in inline prompt mode |
+| `OPENCODE_PROVIDER_ENABLED` | `false` | Enables OpenCode CLI provider readiness and execution paths |
+| `OPENCODE_COMMAND` | `opencode` | CLI binary name/path for OpenCode |
+| `OPENCODE_MODEL` | _empty_ | Required model in `provider/model` format for OpenCode runs |
+| `OPENCODE_AGENT` | `plan` | OpenCode agent used for batch analysis |
+| `OPENCODE_TIMEOUT_MS` | `180000` | OpenCode process timeout |
+| `OPENCODE_MAX_BUFFER_MB` | `20` | Maximum OpenCode stdout/stderr buffer size |
+| `OPENCODE_MAX_INLINE_BYTES` | `51200` | Maximum source bytes allowed in inline prompt mode |
 
 Copy `.env.example` to `.env` to get started.
 

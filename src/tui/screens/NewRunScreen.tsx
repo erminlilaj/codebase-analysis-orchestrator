@@ -51,7 +51,7 @@ export const NewRunScreen: React.FC<{
         <TextInput value={providerId} onChange={setProviderId} onSubmit={() => void submit()} />
       </Box>
       <Box marginTop={1}>
-        <Text dimColor>Known providers: stub (always available), bob (requires Phase 12).</Text>
+        <Text dimColor>Known providers: stub (always available), bob, opencode.</Text>
       </Box>
 
       {error ? <Text color="red">{error}</Text> : null}

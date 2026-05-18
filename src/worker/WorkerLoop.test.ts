@@ -44,6 +44,7 @@ const mockUpdateRunStatus = vi.mocked(updateRunStatus);
 const makeJob = (overrides: Record<string, unknown> = {}) => ({
   id: 'job-1',
   runId: 'run-1',
+  providerId: 'mock',
   attempts: 0,
   metadata: {},
   run: { projectId: 'project-1' },
@@ -140,6 +141,46 @@ describe('WorkerLoop.processJob', () => {
       data: expect.objectContaining({ status: 'completed' }),
     });
     expect(mockUpdateRunStatus).toHaveBeenCalledWith('run-1');
+  });
+
+  it('resolves the provider from each job providerId when a resolver is supplied', async () => {
+    mockFindUnique.mockResolvedValue(makeJob({ providerId: 'opencode' }) as any);
+    const opencodeProvider = makeProvider();
+    opencodeProvider.id = 'opencode';
+    const bobProvider = makeProvider();
+    bobProvider.id = 'bob';
+    const resolver = {
+      get: vi.fn((providerId: string) =>
+        providerId === 'opencode' ? opencodeProvider : bobProvider,
+      ),
+    };
+    const worker = new WorkerLoop(resolver, makeWorkspace(), config);
+
+    await worker.processJob('job-1');
+
+    expect(resolver.get).toHaveBeenCalledWith('opencode');
+    expect(opencodeProvider.analyze).toHaveBeenCalledOnce();
+    expect(bobProvider.analyze).not.toHaveBeenCalled();
+  });
+
+  it('marks the job failed when the resolver cannot find the requested provider', async () => {
+    mockFindUnique.mockResolvedValue(makeJob({ providerId: 'missing' }) as any);
+    const resolver = { get: vi.fn().mockReturnValue(undefined) };
+    const workspace = makeWorkspace();
+    const worker = new WorkerLoop(resolver, workspace, config);
+
+    await worker.processJob('job-1');
+
+    expect(workspace.build).not.toHaveBeenCalled();
+    expect(mockAnswerCreate).not.toHaveBeenCalled();
+    expect(mockJobUpdate).toHaveBeenCalledWith({
+      where: { id: 'job-1' },
+      data: expect.objectContaining({
+        status: 'failed',
+        failureKind: 'non_retryable',
+        lastError: 'Unknown provider: missing',
+      }),
+    });
   });
 
   it('passes reconstructed main and context files to the provider', async () => {

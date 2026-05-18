@@ -17,6 +17,12 @@ describe('envSchema', () => {
     expect(result.data.BOB_TIMEOUT_MS).toBe(180000);
     expect(result.data.BOB_MAX_BUFFER_MB).toBe(20);
     expect(result.data.BOB_MAX_INLINE_BYTES).toBe(51200);
+    expect(result.data.OPENCODE_PROVIDER_ENABLED).toBe(false);
+    expect(result.data.OPENCODE_COMMAND).toBe('opencode');
+    expect(result.data.OPENCODE_AGENT).toBe('plan');
+    expect(result.data.OPENCODE_TIMEOUT_MS).toBe(180000);
+    expect(result.data.OPENCODE_MAX_BUFFER_MB).toBe(20);
+    expect(result.data.OPENCODE_MAX_INLINE_BYTES).toBe(51200);
     expect(result.data.JOB_MAX_ATTEMPTS).toBe(3);
     expect(result.data.WORKER_CONCURRENCY).toBe(4);
     expect(result.data.WORKER_POLL_INTERVAL_MS).toBe(2000);
@@ -31,6 +37,10 @@ describe('envSchema', () => {
       BOB_TIMEOUT_MS: '90000',
       BOB_MAX_BUFFER_MB: '10',
       BOB_MAX_INLINE_BYTES: '2048',
+      OPENCODE_PROVIDER_ENABLED: 'true',
+      OPENCODE_TIMEOUT_MS: '120000',
+      OPENCODE_MAX_BUFFER_MB: '30',
+      OPENCODE_MAX_INLINE_BYTES: '4096',
       JOB_MAX_ATTEMPTS: '5',
       WORKER_CONCURRENCY: '8',
     });
@@ -41,6 +51,10 @@ describe('envSchema', () => {
     expect(result.data.BOB_TIMEOUT_MS).toBe(90000);
     expect(result.data.BOB_MAX_BUFFER_MB).toBe(10);
     expect(result.data.BOB_MAX_INLINE_BYTES).toBe(2048);
+    expect(result.data.OPENCODE_PROVIDER_ENABLED).toBe(true);
+    expect(result.data.OPENCODE_TIMEOUT_MS).toBe(120000);
+    expect(result.data.OPENCODE_MAX_BUFFER_MB).toBe(30);
+    expect(result.data.OPENCODE_MAX_INLINE_BYTES).toBe(4096);
     expect(result.data.JOB_MAX_ATTEMPTS).toBe(5);
     expect(result.data.WORKER_CONCURRENCY).toBe(8);
   });
@@ -49,10 +63,12 @@ describe('envSchema', () => {
     const result = envSchema.safeParse({
       DATABASE_URL: 'postgresql://localhost/test',
       BOB_PROVIDER_ENABLED: 'false',
+      OPENCODE_PROVIDER_ENABLED: 'off',
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.BOB_PROVIDER_ENABLED).toBe(false);
+    expect(result.data.OPENCODE_PROVIDER_ENABLED).toBe(false);
   });
 
   it('rejects non-positive numbers', () => {
@@ -68,5 +84,6 @@ describe('envSchema', () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.BOBSHELL_API_KEY).toBeUndefined();
+    expect(result.data.OPENCODE_MODEL).toBeUndefined();
   });
 });

@@ -1,0 +1,9 @@
+OpenCode analysis result:
+
+{
+  "answer": "PAYROLL computes employee pay.",
+  "confidence": "medium",
+  "evidence": [],
+  "unresolved": ["TAXTABLE"],
+  "missingContext": []
+}

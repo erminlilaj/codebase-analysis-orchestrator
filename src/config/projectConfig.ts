@@ -18,4 +18,13 @@ export const projectConfig = {
     maxBufferMb: env.BOB_MAX_BUFFER_MB,
     maxInlineBytes: env.BOB_MAX_INLINE_BYTES,
   },
+  opencode: {
+    command: env.OPENCODE_COMMAND,
+    model: env.OPENCODE_MODEL,
+    agent: env.OPENCODE_AGENT,
+    enabled: env.OPENCODE_PROVIDER_ENABLED,
+    timeoutMs: env.OPENCODE_TIMEOUT_MS,
+    maxBufferMb: env.OPENCODE_MAX_BUFFER_MB,
+    maxInlineBytes: env.OPENCODE_MAX_INLINE_BYTES,
+  },
 } as const;

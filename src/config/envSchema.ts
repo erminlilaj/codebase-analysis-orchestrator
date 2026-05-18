@@ -19,6 +19,15 @@ export const envSchema = z.object({
   BOB_MAX_BUFFER_MB: z.coerce.number().int().positive().default(20),
   BOB_MAX_INLINE_BYTES: z.coerce.number().int().positive().default(51200),
 
+  // OpenCode CLI provider — validated by the provider adapter at runtime
+  OPENCODE_PROVIDER_ENABLED: booleanFromEnv.default(false),
+  OPENCODE_COMMAND: z.string().default('opencode'),
+  OPENCODE_MODEL: z.string().optional(),
+  OPENCODE_AGENT: z.string().default('plan'),
+  OPENCODE_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
+  OPENCODE_MAX_BUFFER_MB: z.coerce.number().int().positive().default(20),
+  OPENCODE_MAX_INLINE_BYTES: z.coerce.number().int().positive().default(51200),
+
   // Filesystem
   WORKSPACE_ROOT: z.string().default('tmp/workspaces'),
   EXPORT_ROOT: z.string().default('exports'),

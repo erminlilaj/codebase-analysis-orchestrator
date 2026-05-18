@@ -739,8 +739,15 @@ Flag legend:
 11. `[P3][done]` Broaden test coverage: `exportService`, `recordIterator`,
     `WorkerLoop` failure paths, live DB integration tests for concurrent claim
     and stale job recovery; CI workflow running all 194 tests with Postgres.
-12. `[P4][next][blocked]` Test real Bob Shell with an API key and save real CLI
+12. `[P4][done]` Add disabled-by-default OpenCode CLI provider scaffold:
+    health checks, prompt builder, output parser, shell adapter, env config, and
+    provider registry entry.
+13. `[P4][done]` Update `WorkerLoop` to resolve providers per job `providerId`
+    so `stub`, `bob`, and `opencode` can coexist.
+14. `[P4][next][blocked]` Test real Bob Shell with an API key and save real CLI
     output fixtures.
+15. `[P4][next][blocked]` Test real OpenCode CLI with configured credentials and
+    save real `opencode run --format json` output fixtures.
 
 ## Phase G: Run Completion Status — [done]
 

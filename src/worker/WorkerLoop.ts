@@ -17,6 +17,10 @@ export type WorkspaceBuilder = {
   cleanup(jobId: string): Promise<void>;
 };
 
+export type AnalysisProviderResolver = {
+  get(providerId: string): AnalysisProvider | undefined;
+};
+
 export type WorkerConfig = {
   concurrency: number;
   pollIntervalMs: number;
@@ -87,7 +91,7 @@ export class WorkerLoop {
   private running = false;
 
   constructor(
-    private readonly provider: AnalysisProvider,
+    private readonly provider: AnalysisProvider | AnalysisProviderResolver,
     private readonly workspace: WorkspaceBuilder,
     private readonly config: WorkerConfig,
   ) {}
@@ -137,6 +141,12 @@ export class WorkerLoop {
       return;
     }
 
+    const provider = this.resolveProvider(job.providerId);
+    if (!provider) {
+      await this.handleFailure(job, new Error(`Unknown provider: ${job.providerId}`), 'non_retryable');
+      return;
+    }
+
     let workspacePath: string;
     try {
       workspacePath = await this.workspace.build(jobId, bundle);
@@ -146,7 +156,7 @@ export class WorkerLoop {
     }
 
     try {
-      const result = await this.provider.analyze({
+      const result = await provider.analyze({
         jobId: job.id,
         projectId: job.run.projectId,
         bundle,
@@ -222,5 +232,10 @@ export class WorkerLoop {
       });
       await updateRunStatus(job.runId);
     }
+  }
+
+  private resolveProvider(providerId: string): AnalysisProvider | undefined {
+    if ('analyze' in this.provider) return this.provider;
+    return this.provider.get(providerId);
   }
 }

@@ -1,0 +1,3 @@
+{"type":"session","id":"ses_123"}
+{"type":"message.part","part":{"type":"text","text":"{\"answer\":\"BILLING validates customer accounts.\",\"confidence\":\"high\",\"evidence\":[],\"unresolved\":[],\"missingContext\":[]}"}}
+{"type":"message.completed","info":{"inputTokens":123,"outputTokens":45,"totalTokens":168}}

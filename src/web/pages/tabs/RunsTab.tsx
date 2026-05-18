@@ -135,7 +135,7 @@ const NewRunForm: React.FC<{
           <label className="block text-xs font-medium text-slate-600 mb-1">Provider</label>
           <Input value={providerId} onChange={(e) => setProviderId(e.target.value)} placeholder="stub" />
           <p className="text-xs text-slate-500 mt-1">
-            Known: <code className="text-xs">stub</code> (default), <code className="text-xs">bob</code> (requires Phase 12).
+            Known: <code className="text-xs">stub</code> (default), <code className="text-xs">bob</code>, <code className="text-xs">opencode</code>.
           </p>
         </div>
         <div>

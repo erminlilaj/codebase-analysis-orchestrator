@@ -98,6 +98,16 @@ describe('buildServer API routes', () => {
         retryable: false,
         reason: 'Bob provider disabled',
       },
+      opencode: {
+        providerId: 'opencode',
+        name: 'OpenCode CLI',
+        type: 'shell',
+        configured: false,
+        enabled: false,
+        available: false,
+        retryable: false,
+        reason: 'OpenCode provider disabled',
+      },
     });
     app = buildServer();
   });
@@ -182,6 +192,16 @@ describe('buildServer API routes', () => {
         available: false,
         retryable: false,
         reason: 'Bob provider disabled',
+      },
+      opencode: {
+        providerId: 'opencode',
+        name: 'OpenCode CLI',
+        type: 'shell',
+        configured: false,
+        enabled: false,
+        available: false,
+        retryable: false,
+        reason: 'OpenCode provider disabled',
       },
     });
     expect(mocks.listProviderHealth).toHaveBeenCalledOnce();
