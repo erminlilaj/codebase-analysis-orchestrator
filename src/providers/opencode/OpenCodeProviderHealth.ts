@@ -42,18 +42,9 @@ export async function checkOpenCodeProviderHealth(
   if (!config.enabled) {
     return {
       ...base,
-      configured: Boolean(config.command.trim() && config.model?.trim()),
+      configured: Boolean(config.command.trim() && config.agent.trim()),
       available: false,
       reason: 'OpenCode provider disabled',
-    };
-  }
-
-  if (!config.model?.trim()) {
-    return {
-      ...base,
-      configured: false,
-      available: false,
-      reason: 'OPENCODE_MODEL not set',
     };
   }
 

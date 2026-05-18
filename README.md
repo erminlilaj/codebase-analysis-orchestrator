@@ -522,9 +522,9 @@ All config is read once at startup from environment variables, validated by
 | `BOB_TIMEOUT_MS` | `180000` | Bob Shell process timeout |
 | `BOB_MAX_BUFFER_MB` | `20` | Maximum Bob Shell stdout/stderr buffer size |
 | `BOB_MAX_INLINE_BYTES` | `51200` | Maximum source bytes allowed in inline prompt mode |
-| `OPENCODE_PROVIDER_ENABLED` | `false` | Enables OpenCode CLI provider readiness and execution paths |
-| `OPENCODE_COMMAND` | `opencode` | CLI binary name/path for OpenCode |
-| `OPENCODE_MODEL` | _empty_ | Required model in `provider/model` format for OpenCode runs |
+| `OPENCODE_PROVIDER_ENABLED` | `true` | Enables OpenCode CLI provider readiness and execution paths |
+| `OPENCODE_COMMAND` | `opencode` | CLI binary name/path for OpenCode; code falls back to `~/.opencode/bin/opencode` when present |
+| `OPENCODE_MODEL` | _empty_ | Optional model in `provider/model` format; empty uses OpenCode's saved/default model |
 | `OPENCODE_AGENT` | `plan` | OpenCode agent used for batch analysis |
 | `OPENCODE_TIMEOUT_MS` | `180000` | OpenCode process timeout |
 | `OPENCODE_MAX_BUFFER_MB` | `20` | Maximum OpenCode stdout/stderr buffer size |

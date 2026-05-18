@@ -17,7 +17,7 @@ describe('envSchema', () => {
     expect(result.data.BOB_TIMEOUT_MS).toBe(180000);
     expect(result.data.BOB_MAX_BUFFER_MB).toBe(20);
     expect(result.data.BOB_MAX_INLINE_BYTES).toBe(51200);
-    expect(result.data.OPENCODE_PROVIDER_ENABLED).toBe(false);
+    expect(result.data.OPENCODE_PROVIDER_ENABLED).toBe(true);
     expect(result.data.OPENCODE_COMMAND).toBe('opencode');
     expect(result.data.OPENCODE_AGENT).toBe('plan');
     expect(result.data.OPENCODE_TIMEOUT_MS).toBe(180000);

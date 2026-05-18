@@ -1,5 +1,13 @@
 import path from 'path';
+import fs from 'fs';
+import os from 'os';
 import { env } from './env';
+
+function defaultOpenCodeCommand(command: string): string {
+  if (command !== 'opencode') return command;
+  const userInstallPath = path.join(os.homedir(), '.opencode', 'bin', 'opencode');
+  return fs.existsSync(userInstallPath) ? userInstallPath : command;
+}
 
 export const projectConfig = {
   workspaceRoot: path.resolve(env.WORKSPACE_ROOT),
@@ -19,7 +27,7 @@ export const projectConfig = {
     maxInlineBytes: env.BOB_MAX_INLINE_BYTES,
   },
   opencode: {
-    command: env.OPENCODE_COMMAND,
+    command: defaultOpenCodeCommand(env.OPENCODE_COMMAND),
     model: env.OPENCODE_MODEL,
     agent: env.OPENCODE_AGENT,
     enabled: env.OPENCODE_PROVIDER_ENABLED,

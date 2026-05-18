@@ -36,23 +36,6 @@ describe('checkOpenCodeProviderHealth', () => {
     expect(health.details).toMatchObject({ hasModel: true });
   });
 
-  it('reports missing model before checking the command', async () => {
-    const commandCheck = vi.fn();
-
-    const health = await checkOpenCodeProviderHealth(
-      { ...validConfig, model: undefined },
-      commandCheck,
-    );
-
-    expect(health).toMatchObject({
-      configured: false,
-      enabled: true,
-      available: false,
-      reason: 'OPENCODE_MODEL not set',
-    });
-    expect(commandCheck).not.toHaveBeenCalled();
-  });
-
   it('reports invalid numeric config as not configured', async () => {
     const health = await checkOpenCodeProviderHealth({
       ...validConfig,
@@ -83,6 +66,22 @@ describe('checkOpenCodeProviderHealth', () => {
       model: 'anthropic/claude-sonnet-4-5',
       hasModel: true,
       version: '1.15.4',
+    });
+  });
+
+  it('does not require OPENCODE_MODEL because OpenCode can use its own saved config', async () => {
+    const health = await checkOpenCodeProviderHealth(
+      { ...validConfig, model: undefined },
+      async () => ({ version: '1.15.4' }),
+    );
+
+    expect(health).toMatchObject({
+      configured: true,
+      enabled: true,
+      available: true,
+    });
+    expect(health.details).toMatchObject({
+      hasModel: false,
     });
   });
 

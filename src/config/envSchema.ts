@@ -20,7 +20,7 @@ export const envSchema = z.object({
   BOB_MAX_INLINE_BYTES: z.coerce.number().int().positive().default(51200),
 
   // OpenCode CLI provider — validated by the provider adapter at runtime
-  OPENCODE_PROVIDER_ENABLED: booleanFromEnv.default(false),
+  OPENCODE_PROVIDER_ENABLED: booleanFromEnv.default(true),
   OPENCODE_COMMAND: z.string().default('opencode'),
   OPENCODE_MODEL: z.string().optional(),
   OPENCODE_AGENT: z.string().default('plan'),
