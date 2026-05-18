@@ -7,6 +7,8 @@ import { claimNextJobs } from '../core/jobs/jobQueue';
 import { recoverStaleJobs } from './recoverStaleJobs';
 import { classifyError, shouldRetry, type FailureKind } from '../core/jobs/retryPolicy';
 import { updateRunStatus } from '../core/runs/updateRunStatus';
+import type { ProviderConfigOverrides } from '../providers/providerRegistry';
+import { loadProviderCredentials } from '../core/settings/providerCredentials';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,7 +20,7 @@ export type WorkspaceBuilder = {
 };
 
 export type AnalysisProviderResolver = {
-  get(providerId: string): AnalysisProvider | undefined;
+  get(providerId: string, overrides?: ProviderConfigOverrides): AnalysisProvider | undefined;
 };
 
 export type WorkerConfig = {
@@ -83,6 +85,18 @@ function reconstructBundle(job: LoadedJob): AnalysisBundle {
   };
 }
 
+// Extracts per-run provider overrides from AnalysisRun.metadata.
+function readProviderSettings(metadata: unknown): ProviderConfigOverrides | undefined {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  const settings = (metadata as Record<string, unknown>).providerSettings;
+  if (!settings || typeof settings !== 'object') return undefined;
+  const { model, agent } = settings as Record<string, unknown>;
+  const overrides: ProviderConfigOverrides = {};
+  if (typeof model === 'string' && model) overrides.model = model;
+  if (typeof agent === 'string' && agent) overrides.agent = agent;
+  return Object.keys(overrides).length > 0 ? overrides : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // WorkerLoop
 // ---------------------------------------------------------------------------
@@ -141,7 +155,10 @@ export class WorkerLoop {
       return;
     }
 
-    const provider = this.resolveProvider(job.providerId);
+    const provider = this.resolveProvider(
+      job.providerId,
+      await this.buildProviderOverrides(job),
+    );
     if (!provider) {
       await this.handleFailure(job, new Error(`Unknown provider: ${job.providerId}`), 'non_retryable');
       return;
@@ -234,8 +251,23 @@ export class WorkerLoop {
     }
   }
 
-  private resolveProvider(providerId: string): AnalysisProvider | undefined {
+  // Assembles the provider runtime overrides for a job: per-run model/agent
+  // from the run metadata, plus stored provider credentials for OpenCode.
+  private async buildProviderOverrides(
+    job: LoadedJob,
+  ): Promise<ProviderConfigOverrides | undefined> {
+    const settings = readProviderSettings(job.run.metadata);
+    if (job.providerId !== 'opencode') return settings;
+    const credentials = await loadProviderCredentials();
+    if (Object.keys(credentials).length === 0) return settings;
+    return { ...settings, credentials };
+  }
+
+  private resolveProvider(
+    providerId: string,
+    overrides?: ProviderConfigOverrides,
+  ): AnalysisProvider | undefined {
     if ('analyze' in this.provider) return this.provider;
-    return this.provider.get(providerId);
+    return this.provider.get(providerId, overrides);
   }
 }

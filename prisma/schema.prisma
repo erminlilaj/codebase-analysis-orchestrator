@@ -210,3 +210,13 @@ model Export {
   @@index([format])
   @@index([createdAt])
 }
+
+// Provider API credentials, managed from the UI Settings page and injected as
+// environment variables into provider CLI subprocesses (e.g. OpenCode).
+model ProviderCredential {
+  id        String   @id @default(cuid())
+  envVar    String   @unique // environment variable name, e.g. "DEEPSEEK_API_KEY"
+  value     String           // secret value
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

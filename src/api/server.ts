@@ -13,6 +13,7 @@ import { answerRoutes } from './routes/answers.routes';
 import { exportRoutes } from './routes/exports.routes';
 import { fsRoutes } from './routes/fs.routes';
 import { providerRoutes } from './routes/providers.routes';
+import { settingsRoutes } from './routes/settings.routes';
 
 export function buildServer() {
   const app = Fastify({ logger: process.env.NODE_ENV !== 'test' });
@@ -36,6 +37,7 @@ export function buildServer() {
   app.register(exportRoutes, { prefix: '/api/projects' });
   app.register(fsRoutes, { prefix: '/api' });
   app.register(providerRoutes, { prefix: '/api/providers' });
+  app.register(settingsRoutes, { prefix: '/api/settings' });
 
   // Serve the built web UI when it exists. In dev the user runs `npm run web`
   // which starts Vite on its own port and proxies /api/* back here.

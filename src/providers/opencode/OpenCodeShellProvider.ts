@@ -22,6 +22,9 @@ export type OpenCodeShellProviderConfig = OpenCodeProviderHealthConfig & {
   promptFileMode?: OpenCodePromptFileMode;
   format?: 'default' | 'json';
   skipPermissions?: boolean;
+  // Extra environment variables merged into the OpenCode subprocess, e.g.
+  // provider API keys configured from the Settings page.
+  extraEnv?: Record<string, string>;
 };
 
 export type OpenCodeShellExecutionRequest = {
@@ -77,7 +80,7 @@ export class OpenCodeShellProvider implements AnalysisProvider {
       command: this.config.command,
       args,
       cwd: input.workspacePath,
-      env: buildOpenCodeEnv(),
+      env: buildOpenCodeEnv(this.config.extraEnv),
       timeoutMs: this.config.timeoutMs,
       maxBufferBytes: this.config.maxBufferMb * 1024 * 1024,
     });
@@ -124,12 +127,13 @@ export function buildOpenCodeArgs(
   return args;
 }
 
-function buildOpenCodeEnv(): NodeJS.ProcessEnv {
+function buildOpenCodeEnv(extraEnv?: Record<string, string>): NodeJS.ProcessEnv {
   return {
     ...process.env,
     OPENCODE_DISABLE_AUTOUPDATE: process.env.OPENCODE_DISABLE_AUTOUPDATE ?? 'true',
     OPENCODE_DISABLE_LSP_DOWNLOAD: process.env.OPENCODE_DISABLE_LSP_DOWNLOAD ?? 'true',
     OPENCODE_DISABLE_DEFAULT_PLUGINS: process.env.OPENCODE_DISABLE_DEFAULT_PLUGINS ?? 'true',
+    ...extraEnv,
   };
 }
 

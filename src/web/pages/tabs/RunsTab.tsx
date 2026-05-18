@@ -89,6 +89,9 @@ const NewRunForm: React.FC<{
   const { data: project } = useFetch(() => api.getProject(projectId), [projectId]);
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [providerId, setProviderId] = useState('stub');
+  const [model, setModel] = useState('');
+  const [agent, setAgent] = useState('');
+  const providers = useFetch(() => api.listProviders(), []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +103,17 @@ const NewRunForm: React.FC<{
       setSelected(new Set(qs.map((q) => q.id)));
     });
   }, [project]);
+
+  // Pre-fill model/agent from the server-configured OpenCode defaults, without
+  // clobbering anything the user has already typed.
+  useEffect(() => {
+    const details = providers.data?.opencode?.details;
+    if (!details) return;
+    if (typeof details.model === 'string') setModel((cur) => cur || (details.model as string));
+    if (typeof details.agent === 'string') setAgent((cur) => cur || (details.agent as string));
+  }, [providers.data]);
+
+  const isOpenCode = providerId.trim() === 'opencode';
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -119,6 +133,12 @@ const NewRunForm: React.FC<{
       await api.createRun(projectId, {
         providerId: providerId.trim(),
         questionIds: [...selected],
+        ...(isOpenCode
+          ? {
+              ...(model.trim() ? { model: model.trim() } : {}),
+              ...(agent.trim() ? { agent: agent.trim() } : {}),
+            }
+          : {}),
       });
       onCreated();
     } catch (err) {
@@ -138,6 +158,33 @@ const NewRunForm: React.FC<{
             Known: <code className="text-xs">stub</code> (default), <code className="text-xs">bob</code>, <code className="text-xs">opencode</code>.
           </p>
         </div>
+
+        {isOpenCode ? (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Model</label>
+              <Input
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="(OpenCode default)"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                e.g. <code className="text-xs">deepseek/deepseek-chat</code>
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">Agent</label>
+              <Input
+                value={agent}
+                onChange={(e) => setAgent(e.target.value)}
+                placeholder="plan"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                OpenCode agent — <code className="text-xs">plan</code> or <code className="text-xs">build</code>
+              </p>
+            </div>
+          </div>
+        ) : null}
         <div>
           <div className="flex justify-between items-center mb-1">
             <label className="text-xs font-medium text-slate-600">Questions</label>

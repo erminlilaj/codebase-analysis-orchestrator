@@ -12,6 +12,7 @@ export const Layout: React.FC = () => (
         <nav className="flex gap-2 text-sm">
           <NavTab to="/projects">Projects</NavTab>
           <NavTab to="/questions">Questions</NavTab>
+          <NavTab to="/settings">Settings</NavTab>
         </nav>
       </div>
     </header>

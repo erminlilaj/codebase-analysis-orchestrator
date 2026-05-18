@@ -85,7 +85,13 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
 
   app.post<{
     Params: { id: string };
-    Body: { providerId: string; questionIds?: string[]; priority?: number };
+    Body: {
+      providerId: string;
+      questionIds?: string[];
+      priority?: number;
+      model?: string;
+      agent?: string;
+    };
   }>(
     '/:id/runs',
     {
@@ -97,6 +103,8 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
             providerId: { type: 'string' },
             questionIds: { type: 'array', items: { type: 'string' } },
             priority: { type: 'integer' },
+            model: { type: 'string' },
+            agent: { type: 'string' },
           },
         },
       },
@@ -105,7 +113,7 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
       const project = await prisma.project.findUnique({ where: { id: req.params.id } });
       if (!project) return reply.code(404).send({ error: 'Project not found' });
 
-      const { providerId, questionIds, priority = 0 } = req.body;
+      const { providerId, questionIds, priority = 0, model, agent } = req.body;
 
       const providerHealth = await getProviderHealth(providerId);
       if (!providerHealth) {
@@ -133,8 +141,20 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
         return reply.code(422).send({ error: 'No bundles found. Build bundles first.' });
       }
 
+      // Per-run provider overrides (e.g. OpenCode model/agent). Empty values
+      // are dropped so the run inherits the server-configured defaults.
+      const providerSettings: Record<string, string> = {};
+      if (typeof model === 'string' && model.trim()) providerSettings.model = model.trim();
+      if (typeof agent === 'string' && agent.trim()) providerSettings.agent = agent.trim();
+
       const run = await prisma.analysisRun.create({
-        data: { projectId: project.id, startedAt: new Date() },
+        data: {
+          projectId: project.id,
+          startedAt: new Date(),
+          ...(Object.keys(providerSettings).length > 0
+            ? { metadata: { providerSettings } }
+            : {}),
+        },
       });
 
       const jobCount = await generateJobs({

@@ -87,6 +87,24 @@ export type RunCreateResult = { run: AnalysisRun; jobCount: number };
 export type ScanResult = { filesFound: number };
 export type BundleBuildResult = { bundlesCreated: number; message?: string };
 
+export type ProviderHealth = {
+  providerId: string;
+  name: string;
+  type: string;
+  configured: boolean;
+  enabled: boolean;
+  available: boolean;
+  retryable: boolean;
+  reason?: string;
+  details?: Record<string, unknown>;
+};
+
+export type ProviderCredential = {
+  envVar: string;
+  valuePreview: string;
+  updatedAt: string;
+};
+
 export type FsEntry = {
   name: string;
   path: string;

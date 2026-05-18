@@ -480,9 +480,12 @@ routes live under `/projects/:id/...`; run-scoped routes under `/runs/:runId/...
 | `GET` | `/projects/:id/bundles` | List bundles + their files |
 | `POST` | `/projects/:id/bundles` | Build one bundle per source file (idempotent) |
 | `GET` | `/projects/:id/runs` | List runs |
-| `POST` | `/projects/:id/runs` | Create run + generate jobs `{ providerId, questionIds?, priority? }` |
+| `POST` | `/projects/:id/runs` | Create run + generate jobs `{ providerId, questionIds?, priority?, model?, agent? }` |
 | `GET` | `/providers` | List known provider health |
 | `GET` | `/providers/:id/health` | Get one provider health report |
+| `GET` | `/settings/credentials` | List stored provider API keys (values masked) |
+| `PUT` | `/settings/credentials/:envVar` | Set/update a provider API key `{ value }` |
+| `DELETE` | `/settings/credentials/:envVar` | Remove a provider API key |
 | `GET` | `/questions` | List questions (optional `?language=`) |
 | `POST` | `/questions` | Create question `{ key, text, language? }` |
 | `GET/PUT/DELETE` | `/questions/:id` | Manage one question |
@@ -583,9 +586,11 @@ Open <http://127.0.0.1:5173>. Features:
 - **Questions editor** — add/edit/delete questions for the project's language
 - **Files** view with per-language counts and filter
 - **Bundles** view showing main file + resolved context + unresolved deps
+- **New run** form — pick the provider, and for OpenCode set the model + agent per run (saved on the run)
 - **Run detail** with live progress bar (polls every 1.5s while jobs in flight), job statuses, recent answers
 - **Answer viewer** — raw output + parsed JSON
 - **Exports** tab — generate JSON/CSV/Markdown, see past exports
+- **Settings** — store provider API keys (e.g. `DEEPSEEK_API_KEY`); masked in the UI, injected into the OpenCode process at run time
 
 For production: `npm run web:build` writes static assets to `dist/web/`; the
 Fastify API will then serve them from `/` (no separate Vite server needed).
@@ -617,7 +622,7 @@ a remote API server.
 ## Development workflow
 
 ```sh
-npm test              # Vitest unit tests (217 passing; add RUN_LIVE_DB_TESTS=1 for 220)
+npm test              # Vitest unit tests (254 passing; add RUN_LIVE_DB_TESTS=1 for 257)
 npm run typecheck     # tsc --noEmit, must be clean
 npm run e2e           # End-to-end smoke against live DB (requires Postgres)
 npm run build         # Production build to dist/
@@ -643,7 +648,7 @@ To run them:
 docker compose up -d           # Postgres must be running
 npm run db:deploy              # Apply migrations
 
-RUN_LIVE_DB_TESTS=1 npm test   # Enables both live DB suites (220 total)
+RUN_LIVE_DB_TESTS=1 npm test   # Enables both live DB suites (257 total)
 ```
 
 In CI the `RUN_LIVE_DB_TESTS=1` flag is set automatically — see
@@ -746,7 +751,7 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | 12: Bob Shell provider | In progress | Prompt builder, output parser, readiness checks, health endpoints, and shell adapter scaffold implemented; real Bob execution blocked on API key/CLI verification |
 | 13: REST API | Complete | 8 route modules |
 | 14: Exports (JSON/CSV/Markdown) | Complete | Streaming, paginated, backpressure-aware |
-| 15: Tests (broaden coverage) | Done | 220 tests (217 unit + 3 live DB); `failureKind` + soft-failure paths, exporter field coverage; CI workflow runs all tests with Postgres service container |
+| 15: Tests (broaden coverage) | Done | 257 tests (254 unit + 3 live DB); `failureKind` + soft-failure paths, exporter field coverage; CI workflow runs all tests with Postgres service container |
 | 16: Pilot workflow | Done | 14-file COBOL fixture repo; `npm run e2e` produces 42 jobs, 42 answers, JSON/CSV/Markdown exports in ~3 s with `StubProvider` |
 | G: Run completion status | Done | `AnalysisRun.status` transitions to `completed`, `failed`, or `blocked` when all jobs finish; `runStatus` surfaced in all export formats |
 | H: Question versioning | Done | `Question.version` bumped on edit; jobs record `questionVersion`; `stale` flag in all exports; `GET /runs/:runId/stale-jobs` lists outdated jobs |

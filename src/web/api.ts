@@ -7,6 +7,8 @@ import type {
   AnalysisAnswer,
   Question,
   ExportRecord,
+  ProviderHealth,
+  ProviderCredential,
   RunCreateResult,
   ScanResult,
   BundleBuildResult,
@@ -69,7 +71,13 @@ export const listRuns = (projectId: string) =>
   request<AnalysisRun[]>('GET', `/projects/${projectId}/runs`);
 export const createRun = (
   projectId: string,
-  body: { providerId: string; questionIds?: string[]; priority?: number },
+  body: {
+    providerId: string;
+    questionIds?: string[];
+    priority?: number;
+    model?: string;
+    agent?: string;
+  },
 ) => request<RunCreateResult>('POST', `/projects/${projectId}/runs`, body);
 export const getRun = (runId: string) => request<AnalysisRun>('GET', `/runs/${runId}`);
 export const listRunJobs = (runId: string, status?: string) =>
@@ -86,6 +94,18 @@ export const listExports = (projectId: string) =>
   request<ExportRecord[]>('GET', `/projects/${projectId}/exports`);
 export const createExport = (projectId: string, body: { format: 'json' | 'csv' | 'markdown'; runId?: string }) =>
   request<ExportRecord>('POST', `/projects/${projectId}/exports`, body);
+
+// Providers
+export const listProviders = () =>
+  request<Record<string, ProviderHealth>>('GET', '/providers');
+
+// Settings — provider API credentials
+export const listCredentials = () =>
+  request<ProviderCredential[]>('GET', '/settings/credentials');
+export const saveCredential = (envVar: string, value: string) =>
+  request<ProviderCredential>('PUT', `/settings/credentials/${envVar}`, { value });
+export const deleteCredential = (envVar: string) =>
+  request<void>('DELETE', `/settings/credentials/${envVar}`);
 
 // Filesystem
 export const fsList = (path?: string) =>

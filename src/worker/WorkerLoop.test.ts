@@ -24,11 +24,16 @@ vi.mock('../core/runs/updateRunStatus', () => ({
   updateRunStatus: vi.fn(),
 }));
 
+vi.mock('../core/settings/providerCredentials', () => ({
+  loadProviderCredentials: vi.fn(),
+}));
+
 import { WorkerLoop } from './WorkerLoop';
 import { prisma } from '../db/prisma';
 import { claimNextJobs } from '../core/jobs/jobQueue';
 import { recoverStaleJobs } from './recoverStaleJobs';
 import { updateRunStatus } from '../core/runs/updateRunStatus';
+import { loadProviderCredentials } from '../core/settings/providerCredentials';
 
 const mockFindUnique = vi.mocked(prisma.analysisJob.findUnique);
 const mockJobUpdate = vi.mocked(prisma.analysisJob.update);
@@ -36,6 +41,7 @@ const mockAnswerCreate = vi.mocked(prisma.analysisAnswer.create);
 const mockClaimNextJobs = vi.mocked(claimNextJobs);
 const mockRecoverStaleJobs = vi.mocked(recoverStaleJobs);
 const mockUpdateRunStatus = vi.mocked(updateRunStatus);
+const mockLoadCredentials = vi.mocked(loadProviderCredentials);
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -107,6 +113,7 @@ beforeEach(() => {
   mockClaimNextJobs.mockResolvedValue([]);
   mockRecoverStaleJobs.mockResolvedValue(0);
   mockUpdateRunStatus.mockResolvedValue(undefined);
+  mockLoadCredentials.mockResolvedValue({});
 });
 
 describe('WorkerLoop.processJob', () => {
@@ -158,9 +165,57 @@ describe('WorkerLoop.processJob', () => {
 
     await worker.processJob('job-1');
 
-    expect(resolver.get).toHaveBeenCalledWith('opencode');
+    expect(resolver.get).toHaveBeenCalledWith('opencode', undefined);
     expect(opencodeProvider.analyze).toHaveBeenCalledOnce();
     expect(bobProvider.analyze).not.toHaveBeenCalled();
+  });
+
+  it('passes per-run provider settings from run.metadata to the resolver', async () => {
+    mockFindUnique.mockResolvedValue(
+      makeJob({
+        providerId: 'opencode',
+        run: {
+          projectId: 'project-1',
+          metadata: { providerSettings: { model: 'deepseek/deepseek-chat', agent: 'plan' } },
+        },
+      }) as any,
+    );
+    const provider = makeProvider();
+    provider.id = 'opencode';
+    const resolver = { get: vi.fn().mockReturnValue(provider) };
+    const worker = new WorkerLoop(resolver, makeWorkspace(), config);
+
+    await worker.processJob('job-1');
+
+    expect(resolver.get).toHaveBeenCalledWith('opencode', {
+      model: 'deepseek/deepseek-chat',
+      agent: 'plan',
+    });
+  });
+
+  it('injects stored provider credentials into OpenCode provider resolution', async () => {
+    mockFindUnique.mockResolvedValue(makeJob({ providerId: 'opencode' }) as any);
+    mockLoadCredentials.mockResolvedValue({ DEEPSEEK_API_KEY: 'sk-secret' });
+    const provider = makeProvider();
+    provider.id = 'opencode';
+    const resolver = { get: vi.fn().mockReturnValue(provider) };
+    const worker = new WorkerLoop(resolver, makeWorkspace(), config);
+
+    await worker.processJob('job-1');
+
+    expect(resolver.get).toHaveBeenCalledWith('opencode', {
+      credentials: { DEEPSEEK_API_KEY: 'sk-secret' },
+    });
+  });
+
+  it('does not load credentials for non-OpenCode providers', async () => {
+    mockFindUnique.mockResolvedValue(makeJob({ providerId: 'stub' }) as any);
+    const resolver = { get: vi.fn().mockReturnValue(makeProvider()) };
+    const worker = new WorkerLoop(resolver, makeWorkspace(), config);
+
+    await worker.processJob('job-1');
+
+    expect(mockLoadCredentials).not.toHaveBeenCalled();
   });
 
   it('marks the job failed when the resolver cannot find the requested provider', async () => {

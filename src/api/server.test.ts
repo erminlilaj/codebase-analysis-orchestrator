@@ -41,6 +41,12 @@ const mocks = vi.hoisted(() => ({
     export: {
       findMany: vi.fn(),
     },
+    providerCredential: {
+      findMany: vi.fn(),
+      findUnique: vi.fn(),
+      upsert: vi.fn(),
+      delete: vi.fn(),
+    },
   },
   generateJobs: vi.fn(),
   retryJobs: vi.fn(),
@@ -411,6 +417,31 @@ describe('buildServer API routes', () => {
     });
   });
 
+  it('stores per-run model and agent in run metadata', async () => {
+    mocks.prisma.project.findUnique.mockResolvedValue({ id: 'project-1', language: 'cobol' });
+    mocks.getQuestionsForLanguage.mockResolvedValue([
+      { id: 'question-1', key: 'purpose', text: 'Purpose?' },
+    ]);
+    mocks.prisma.analysisBundle.findMany.mockResolvedValue([{ id: 'bundle-1' }]);
+    mocks.prisma.analysisRun.create.mockResolvedValue({ id: 'run-1', projectId: 'project-1' });
+    mocks.generateJobs.mockResolvedValue(1);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/projects/project-1/runs',
+      payload: { providerId: 'opencode', model: 'deepseek/deepseek-chat', agent: 'plan' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mocks.prisma.analysisRun.create).toHaveBeenCalledWith({
+      data: {
+        projectId: 'project-1',
+        startedAt: expect.any(Date),
+        metadata: { providerSettings: { model: 'deepseek/deepseek-chat', agent: 'plan' } },
+      },
+    });
+  });
+
   it('rejects run creation when no bundles exist', async () => {
     mocks.prisma.project.findUnique.mockResolvedValue({ id: 'project-1', language: 'cobol' });
     mocks.getQuestionsForLanguage.mockResolvedValue([
@@ -475,5 +506,86 @@ describe('buildServer API routes', () => {
     expect(mocks.getQuestionsForLanguage).not.toHaveBeenCalled();
     expect(mocks.prisma.analysisRun.create).not.toHaveBeenCalled();
     expect(mocks.generateJobs).not.toHaveBeenCalled();
+  });
+
+  it('lists provider credentials with masked values', async () => {
+    mocks.prisma.providerCredential.findMany.mockResolvedValue([
+      { envVar: 'DEEPSEEK_API_KEY', value: 'sk-abcd1234', updatedAt: now },
+    ]);
+
+    const res = await app.inject({ method: 'GET', url: '/api/settings/credentials' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { envVar: 'DEEPSEEK_API_KEY', valuePreview: '••••1234', updatedAt: now.toISOString() },
+    ]);
+  });
+
+  it('upserts a credential and returns a masked value', async () => {
+    mocks.prisma.providerCredential.upsert.mockResolvedValue({
+      envVar: 'DEEPSEEK_API_KEY',
+      value: 'sk-secret9999',
+      updatedAt: now,
+    });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/settings/credentials/DEEPSEEK_API_KEY',
+      payload: { value: 'sk-secret9999' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      envVar: 'DEEPSEEK_API_KEY',
+      valuePreview: '••••9999',
+      updatedAt: now.toISOString(),
+    });
+    expect(mocks.prisma.providerCredential.upsert).toHaveBeenCalledWith({
+      where: { envVar: 'DEEPSEEK_API_KEY' },
+      create: { envVar: 'DEEPSEEK_API_KEY', value: 'sk-secret9999' },
+      update: { value: 'sk-secret9999' },
+    });
+  });
+
+  it('rejects an invalid environment variable name', async () => {
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/settings/credentials/bad-name',
+      payload: { value: 'sk-x' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mocks.prisma.providerCredential.upsert).not.toHaveBeenCalled();
+  });
+
+  it('deletes a credential', async () => {
+    mocks.prisma.providerCredential.findUnique.mockResolvedValue({
+      envVar: 'DEEPSEEK_API_KEY',
+      value: 'sk-x',
+      updatedAt: now,
+    });
+    mocks.prisma.providerCredential.delete.mockResolvedValue({});
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/settings/credentials/DEEPSEEK_API_KEY',
+    });
+
+    expect(res.statusCode).toBe(204);
+    expect(mocks.prisma.providerCredential.delete).toHaveBeenCalledWith({
+      where: { envVar: 'DEEPSEEK_API_KEY' },
+    });
+  });
+
+  it('returns 404 when deleting a credential that does not exist', async () => {
+    mocks.prisma.providerCredential.findUnique.mockResolvedValue(null);
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: '/api/settings/credentials/MISSING_KEY',
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect(mocks.prisma.providerCredential.delete).not.toHaveBeenCalled();
   });
 });

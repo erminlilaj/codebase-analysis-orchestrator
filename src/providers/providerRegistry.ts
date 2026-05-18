@@ -33,9 +33,27 @@ export async function listProviderHealth(): Promise<Record<KnownProviderId, Prov
   return Object.fromEntries(entries) as Record<KnownProviderId, ProviderHealth>;
 }
 
-export function getProvider(providerId: string): AnalysisProvider | undefined {
+// Provider runtime overrides assembled per job by the worker: per-run model/
+// agent (from AnalysisRun.metadata) and provider credentials (from the DB).
+export type ProviderConfigOverrides = {
+  model?: string;
+  agent?: string;
+  credentials?: Record<string, string>;
+};
+
+export function getProvider(
+  providerId: string,
+  overrides?: ProviderConfigOverrides,
+): AnalysisProvider | undefined {
   if (providerId === 'stub') return new StubProvider();
   if (providerId === 'bob') return new BobShellProvider(projectConfig.bob);
-  if (providerId === 'opencode') return new OpenCodeShellProvider(projectConfig.opencode);
+  if (providerId === 'opencode') {
+    return new OpenCodeShellProvider({
+      ...projectConfig.opencode,
+      ...(overrides?.model ? { model: overrides.model } : {}),
+      ...(overrides?.agent ? { agent: overrides.agent } : {}),
+      ...(overrides?.credentials ? { extraEnv: overrides.credentials } : {}),
+    });
+  }
   return undefined;
 }
