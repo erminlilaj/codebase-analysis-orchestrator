@@ -48,6 +48,7 @@ export type AnalysisJob = {
   priority: number;
   attempts: number;
   lastError: string | null;
+  failureKind: string | null;
   createdAt: string;
   question?: Question;
 };
