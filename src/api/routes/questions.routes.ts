@@ -44,7 +44,17 @@ export async function questionRoutes(app: FastifyInstance): Promise<void> {
   }>('/:id', async (req, reply) => {
     const question = await prisma.question.findUnique({ where: { id: req.params.id } });
     if (!question) return reply.code(404).send({ error: 'Question not found' });
-    return prisma.question.update({ where: { id: req.params.id }, data: req.body });
+
+    const { key, text, language } = req.body;
+    const changed =
+      (key !== undefined && key !== question.key) ||
+      (text !== undefined && text !== question.text) ||
+      (language !== undefined && language !== question.language);
+
+    return prisma.question.update({
+      where: { id: req.params.id },
+      data: { ...req.body, ...(changed ? { version: question.version + 1 } : {}) },
+    });
   });
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {

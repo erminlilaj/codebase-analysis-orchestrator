@@ -14,19 +14,30 @@ type JobData = {
   runId: string;
   bundleId: string;
   questionId: string;
+  questionVersion: number;
   providerId: string;
   priority: number;
 };
 
 // Yields batches of the bundle × question cross-product without materialising
 // the full list. Keeps memory flat regardless of input size.
-function* jobBatches(params: Required<GenerateJobsParams>): Generator<JobData[]> {
+function* jobBatches(
+  params: Required<GenerateJobsParams>,
+  versionByQuestionId: Map<string, number>,
+): Generator<JobData[]> {
   const { runId, bundleIds, questionIds, providerId, priority } = params;
   let batch: JobData[] = [];
 
   for (const bundleId of bundleIds) {
     for (const questionId of questionIds) {
-      batch.push({ runId, bundleId, questionId, providerId, priority });
+      batch.push({
+        runId,
+        bundleId,
+        questionId,
+        questionVersion: versionByQuestionId.get(questionId) ?? 1,
+        providerId,
+        priority,
+      });
       if (batch.length === BATCH_SIZE) {
         yield batch;
         batch = [];
@@ -40,14 +51,25 @@ function* jobBatches(params: Required<GenerateJobsParams>): Generator<JobData[]>
 /**
  * Creates one AnalysisJob per (bundle, question) pair and returns the total
  * number of jobs inserted. Inserts in batches of 500 to avoid large payloads.
+ * Each job records the current Question.version so stale answers can be
+ * detected after a question is edited.
  */
 export async function generateJobs(params: GenerateJobsParams): Promise<number> {
   const { runId, bundleIds, questionIds, providerId, priority = 0 } = params;
 
   if (bundleIds.length === 0 || questionIds.length === 0) return 0;
 
+  const questions = await prisma.question.findMany({
+    where: { id: { in: questionIds } },
+    select: { id: true, version: true },
+  });
+  const versionByQuestionId = new Map(questions.map((q) => [q.id, q.version]));
+
   let total = 0;
-  for (const batch of jobBatches({ runId, bundleIds, questionIds, providerId, priority })) {
+  for (const batch of jobBatches(
+    { runId, bundleIds, questionIds, providerId, priority },
+    versionByQuestionId,
+  )) {
     const { count } = await prisma.analysisJob.createMany({ data: batch });
     total += count;
   }

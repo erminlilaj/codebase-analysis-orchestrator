@@ -26,6 +26,18 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  app.get<{ Params: { runId: string } }>('/runs/:runId/stale-jobs', async (req, reply) => {
+    const run = await prisma.analysisRun.findUnique({ where: { id: req.params.runId } });
+    if (!run) return reply.code(404).send({ error: 'Run not found' });
+
+    const jobs = await prisma.analysisJob.findMany({
+      where: { runId: req.params.runId },
+      include: { question: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return jobs.filter((job) => job.questionVersion < job.question.version);
+  });
+
   app.get<{ Params: { id: string } }>('/jobs/:id', async (req, reply) => {
     const job = await prisma.analysisJob.findUnique({
       where: { id: req.params.id },

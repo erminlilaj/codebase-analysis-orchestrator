@@ -119,6 +119,7 @@ model Question {
   key       String   @unique  // short slug, e.g. "purpose", "data-structures"
   text      String
   language  String?           // null = universal; "cobol", "java", etc. = language-specific
+  version   Int      @default(1)  // bumped whenever key/text/language changes
   metadata  Json     @default("{}")
   createdAt DateTime @default(now())
 
@@ -149,22 +150,23 @@ model AnalysisRun {
 
 // One job = one bundle + one question + one provider, processed by a worker.
 model AnalysisJob {
-  id          String    @id @default(cuid())
-  runId       String
-  bundleId    String
-  questionId  String
-  providerId  String    // free string, e.g. "bob", "openai", "anthropic"
-  status      JobStatus @default(pending)
-  priority    Int       @default(0)
-  attempts    Int       @default(0)
-  lastError   String?
-  failureKind String?
-  claimedAt   DateTime?
-  startedAt   DateTime?
-  finishedAt  DateTime?
-  metadata    Json      @default("{}")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  runId           String
+  bundleId        String
+  questionId      String
+  questionVersion Int       @default(1)  // Question.version at job generation time
+  providerId      String    // free string, e.g. "bob", "openai", "anthropic"
+  status          JobStatus @default(pending)
+  priority        Int       @default(0)
+  attempts        Int       @default(0)
+  lastError       String?
+  failureKind     String?
+  claimedAt       DateTime?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  metadata        Json      @default("{}")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   run         AnalysisRun    @relation(fields: [runId], references: [id], onDelete: Cascade)
   bundle      AnalysisBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)

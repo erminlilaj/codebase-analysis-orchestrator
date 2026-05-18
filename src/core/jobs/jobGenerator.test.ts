@@ -5,6 +5,9 @@ vi.mock('../../db/prisma', () => ({
     analysisJob: {
       createMany: vi.fn(),
     },
+    question: {
+      findMany: vi.fn(),
+    },
   },
 }));
 
@@ -12,10 +15,12 @@ import { generateJobs } from './jobGenerator';
 import { prisma } from '../../db/prisma';
 
 const mockCreateMany = vi.mocked(prisma.analysisJob.createMany);
+const mockQuestionFind = vi.mocked(prisma.question.findMany);
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockCreateMany.mockResolvedValue({ count: 0 } as any);
+  mockQuestionFind.mockResolvedValue([] as any);
 });
 
 describe('generateJobs', () => {
@@ -68,9 +73,34 @@ describe('generateJobs', () => {
       runId: 'run-1',
       bundleId: 'bundle-1',
       questionId: 'question-1',
+      questionVersion: 1,
       providerId: 'bob',
       priority: 5,
     });
+  });
+
+  it('records the current question version on each job', async () => {
+    mockQuestionFind.mockResolvedValue([{ id: 'q1', version: 3 }] as any);
+    mockCreateMany.mockResolvedValue({ count: 1 } as any);
+
+    await generateJobs({
+      runId: 'r1', bundleIds: ['b1'], questionIds: ['q1'], providerId: 'bob',
+    });
+
+    const call = mockCreateMany.mock.calls[0][0] as { data: Array<{ questionVersion: number }> };
+    expect(call.data[0].questionVersion).toBe(3);
+  });
+
+  it('defaults questionVersion to 1 when the question lookup returns nothing', async () => {
+    mockQuestionFind.mockResolvedValue([] as any);
+    mockCreateMany.mockResolvedValue({ count: 1 } as any);
+
+    await generateJobs({
+      runId: 'r1', bundleIds: ['b1'], questionIds: ['q1'], providerId: 'bob',
+    });
+
+    const call = mockCreateMany.mock.calls[0][0] as { data: Array<{ questionVersion: number }> };
+    expect(call.data[0].questionVersion).toBe(1);
   });
 
   it('defaults priority to 0', async () => {

@@ -236,6 +236,66 @@ describe('buildServer API routes', () => {
     });
   });
 
+  it('returns only jobs whose question version is behind from stale-jobs', async () => {
+    const run = { id: 'run-1', projectId: 'project-1', status: 'completed' };
+    const jobs = [
+      { id: 'job-1', runId: 'run-1', questionVersion: 1, question: { version: 2 } },
+      { id: 'job-2', runId: 'run-1', questionVersion: 2, question: { version: 2 } },
+    ];
+    mocks.prisma.analysisRun.findUnique.mockResolvedValue(run);
+    mocks.prisma.analysisJob.findMany.mockResolvedValue(jobs);
+
+    const res = await app.inject({ method: 'GET', url: '/api/runs/run-1/stale-jobs' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([jobs[0]]);
+  });
+
+  it('returns 404 from stale-jobs when the run does not exist', async () => {
+    mocks.prisma.analysisRun.findUnique.mockResolvedValue(null);
+
+    const res = await app.inject({ method: 'GET', url: '/api/runs/missing/stale-jobs' });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: 'Run not found' });
+  });
+
+  it('increments question version when the text changes', async () => {
+    const question = { id: 'q1', key: 'purpose', text: 'Old text', language: null, version: 1 };
+    mocks.prisma.question.findUnique.mockResolvedValue(question);
+    mocks.prisma.question.update.mockResolvedValue({ ...question, text: 'New text', version: 2 });
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/questions/q1',
+      payload: { text: 'New text' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mocks.prisma.question.update).toHaveBeenCalledWith({
+      where: { id: 'q1' },
+      data: { text: 'New text', version: 2 },
+    });
+  });
+
+  it('does not increment question version when the text is unchanged', async () => {
+    const question = { id: 'q1', key: 'purpose', text: 'Same text', language: null, version: 1 };
+    mocks.prisma.question.findUnique.mockResolvedValue(question);
+    mocks.prisma.question.update.mockResolvedValue(question);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/questions/q1',
+      payload: { text: 'Same text' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(mocks.prisma.question.update).toHaveBeenCalledWith({
+      where: { id: 'q1' },
+      data: { text: 'Same text' },
+    });
+  });
+
   it('creates a run from default language questions and bundle cross-product', async () => {
     const project = { id: 'project-1', language: 'cobol' };
     const bundles = [{ id: 'bundle-1' }, { id: 'bundle-2' }];

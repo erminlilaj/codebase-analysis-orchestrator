@@ -809,7 +809,7 @@ ALTER TABLE "AnalysisRun" ADD COLUMN "finishedAt" TIMESTAMP(3);
 
 ---
 
-## Phase H: Question Versioning — [pending]
+## Phase H: Question Versioning — [done]
 
 Prevent stale answers when a question is edited after jobs have been generated.
 
