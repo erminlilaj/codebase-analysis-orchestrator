@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { JobStatus } from '@prisma/client';
 import { prisma } from '../../db/prisma';
 import { retryJobs } from '../../core/jobs/retryJobs';
+import { eventBus, type WorkerLogEvent } from '../eventBus';
 
 export async function jobRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { runId: string } }>('/runs/:runId', async (req, reply) => {
@@ -89,5 +90,30 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     });
     if (!job) return reply.code(404).send({ error: 'Job not found' });
     return job;
+  });
+
+  app.get<{ Params: { runId: string } }>('/runs/:runId/stream', async (req, reply) => {
+    const run = await prisma.analysisRun.findUnique({ where: { id: req.params.runId } });
+    if (!run) return reply.code(404).send({ error: 'Run not found' });
+
+    reply.hijack();
+    const res = reply.raw;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000);
+
+    const listener = (event: WorkerLogEvent) => {
+      if (event.runId === req.params.runId) {
+        res.write(`data: ${JSON.stringify(event)}\n\n`);
+      }
+    };
+
+    eventBus.on('worker', listener);
+    await new Promise<void>((resolve) => req.raw.on('close', resolve));
+    clearInterval(heartbeat);
+    eventBus.off('worker', listener);
   });
 }

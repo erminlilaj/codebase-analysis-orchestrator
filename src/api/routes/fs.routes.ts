@@ -26,23 +26,17 @@ export async function fsRoutes(app: FastifyInstance): Promise<void> {
       abs = path.resolve(target);
       const stat = await fs.stat(abs);
       if (!stat.isDirectory()) {
-        return reply.code(400).send({ error: `Not a directory: ${abs}` });
+        return reply.code(400).send({ error: `Not a directory: ${target}` });
       }
-    } catch (err) {
-      return reply.code(404).send({
-        error: `Path not accessible: ${target}`,
-        cause: err instanceof Error ? err.message : String(err),
-      });
+    } catch {
+      return reply.code(404).send({ error: `Path not found: ${target}` });
     }
 
     let dirents;
     try {
       dirents = await fs.readdir(abs, { withFileTypes: true });
-    } catch (err) {
-      return reply.code(403).send({
-        error: `Cannot read directory: ${abs}`,
-        cause: err instanceof Error ? err.message : String(err),
-      });
+    } catch {
+      return reply.code(403).send({ error: `Cannot read directory: ${target}` });
     }
 
     const entries: FsEntry[] = dirents

@@ -9,6 +9,7 @@ import { classifyError, shouldRetry, type FailureKind } from '../core/jobs/retry
 import { updateRunStatus } from '../core/runs/updateRunStatus';
 import type { ProviderConfigOverrides } from '../providers/providerRegistry';
 import { loadProviderCredentials } from '../core/settings/providerCredentials';
+import { eventBus, type WorkerLogEvent } from '../api/eventBus';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -98,8 +99,17 @@ function readProviderSettings(metadata: unknown): ProviderConfigOverrides | unde
 }
 
 // Worker activity logging — silenced under NODE_ENV=test to keep tests quiet.
-function logWorker(message: string): void {
-  if (process.env.NODE_ENV !== 'test') console.log(`[worker] ${message}`);
+// When a runId is provided the event is also forwarded to SSE clients watching that run.
+function logWorker(
+  message: string,
+  level: WorkerLogEvent['level'] = 'info',
+  runId?: string,
+): void {
+  if (process.env.NODE_ENV === 'test') return;
+  console.log(`[worker] ${message}`);
+  if (runId) {
+    eventBus.emit('worker', { type: 'log', runId, level, message, ts: Date.now() } satisfies WorkerLogEvent);
+  }
 }
 
 // Formats the trailing "· N tokens · Nms · parse=…" suffix for a result log.
@@ -168,6 +178,8 @@ export class WorkerLoop {
       `job ${job.id} · ${job.providerId}` +
         (overrides?.model ? ` · ${overrides.model}` : '') +
         ` · q=${job.question.key}`,
+      'info',
+      job.run.id,
     );
 
     let bundle: AnalysisBundle;
@@ -227,7 +239,7 @@ export class WorkerLoop {
         where: { id: jobId },
         data: { status: 'completed' as any, finishedAt: new Date() },
       });
-      logWorker(`job ${job.id} done${formatResultInfo(result.metadata)}`);
+      logWorker(`job ${job.id} done${formatResultInfo(result.metadata)}`, 'info', job.runId);
       await updateRunStatus(job.runId);
     } catch (err) {
       await this.handleFailure(job, err);
@@ -259,6 +271,8 @@ export class WorkerLoop {
       });
       logWorker(
         `job ${job.id} retry ${newAttempts}/${this.config.maxAttempts} (${kind}): ${lastError}`,
+        'warn',
+        job.runId,
       );
     } else {
       await prisma.analysisJob.update({
@@ -271,7 +285,7 @@ export class WorkerLoop {
           finishedAt: new Date(),
         },
       });
-      logWorker(`job ${job.id} FAILED (${kind}): ${lastError}`);
+      logWorker(`job ${job.id} FAILED (${kind}): ${lastError}`, 'error', job.runId);
       await updateRunStatus(job.runId);
     }
   }

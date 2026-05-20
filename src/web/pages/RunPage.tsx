@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import * as api from '../api';
 import { answerSummary } from '../../core/answers/answerSummary';
-import { useFetch } from '../hooks';
+import { useFetch, useWorkerLogs, type LogEntry } from '../hooks';
 import type { AnalysisJob } from '../types';
 import {
   Card,
@@ -38,6 +38,11 @@ export const RunPage: React.FC = () => {
   const failed = counts.failed ?? 0;
   const total = jobs.data?.length ?? 0;
   const active = (counts.pending ?? 0) + (counts.claimed ?? 0) + (counts.running ?? 0);
+
+  const runActive = run.data
+    ? run.data.status === 'pending' || run.data.status === 'running'
+    : false;
+  const logs = useWorkerLogs(runId!, runActive);
 
   if (run.error) return <ErrorMessage error={run.error} />;
   if (!run.data) return <div className="flex items-center gap-2 text-slate-500"><Spinner /> Loading…</div>;
@@ -118,6 +123,8 @@ export const RunPage: React.FC = () => {
         )}
       </Card>
 
+      <LogPanel logs={logs} active={runActive} />
+
       <Card>
         <CardHeader>
           <div className="font-medium text-sm">Recent answers ({answers.data?.length ?? 0})</div>
@@ -155,6 +162,61 @@ export const RunPage: React.FC = () => {
         )}
       </Card>
     </div>
+  );
+};
+
+const LOG_LEVEL_CLS: Record<LogEntry['level'], string> = {
+  info: 'text-slate-300',
+  warn: 'text-amber-400',
+  error: 'text-red-400',
+};
+
+const LogPanel: React.FC<{ logs: LogEntry[]; active: boolean }> = ({ logs, active }) => {
+  const [open, setOpen] = useState(true);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (open) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs, open]);
+
+  return (
+    <Card>
+      <CardHeader>
+        <button
+          className="flex items-center gap-2 w-full text-left"
+          onClick={() => setOpen((o) => !o)}
+        >
+          <span className="font-medium text-sm">Live logs</span>
+          {active ? (
+            <span className="flex items-center gap-1 text-xs text-amber-700">
+              <Spinner className="text-amber-700" /> streaming
+            </span>
+          ) : (
+            <span className="text-xs text-slate-400">run finished</span>
+          )}
+          <span className="ml-auto text-slate-400 text-xs">{open ? '▲' : '▼'}</span>
+        </button>
+      </CardHeader>
+      {open ? (
+        <div className="bg-slate-900 rounded-b-lg max-h-72 overflow-auto p-4 font-mono text-xs">
+          {logs.length === 0 ? (
+            <div className="text-slate-500">
+              {active ? 'Waiting for worker activity…' : 'No logs captured.'}
+            </div>
+          ) : (
+            logs.map((l, i) => (
+              <div key={i} className={`leading-5 ${LOG_LEVEL_CLS[l.level]}`}>
+                <span className="text-slate-600 select-none mr-2">
+                  {new Date(l.ts).toLocaleTimeString()}
+                </span>
+                {l.message}
+              </div>
+            ))
+          )}
+          <div ref={bottomRef} />
+        </div>
+      ) : null}
+    </Card>
   );
 };
 

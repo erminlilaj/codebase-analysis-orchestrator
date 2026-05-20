@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
+export type LogEntry = { message: string; level: 'info' | 'warn' | 'error'; ts: number };
+
 /** Fetch + auto-refresh, with loading & error state. */
 export function useFetch<T>(
   fn: () => Promise<T>,
@@ -52,4 +54,28 @@ export function useFetch<T>(
   }, [...deps, tick]);
 
   return { data, error, loading, refresh: () => setTick((t) => t + 1) };
+}
+
+/** Stream worker log events for a run via SSE. Pass enabled=false to skip connecting. */
+export function useWorkerLogs(runId: string, enabled: boolean): LogEntry[] {
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    setLogs([]);
+    const es = new EventSource(`/api/runs/${runId}/stream`);
+    es.onmessage = (e: MessageEvent<string>) => {
+      try {
+        const event = JSON.parse(e.data) as { type: string } & LogEntry;
+        if (event.type === 'log') {
+          setLogs((prev) => [...prev.slice(-499), { message: event.message, level: event.level, ts: event.ts }]);
+        }
+      } catch {
+        // malformed event — ignore
+      }
+    };
+    return () => es.close();
+  }, [runId, enabled]);
+
+  return logs;
 }
