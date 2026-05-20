@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import * as api from '../api';
 import { useFetch } from '../hooks';
-import { Button, ErrorMessage, Spinner } from '../components/ui';
+import { Button, Spinner, useToast } from '../components/ui';
 import { OverviewTab } from './tabs/OverviewTab';
 import { FilesTab } from './tabs/FilesTab';
 import { BundlesTab } from './tabs/BundlesTab';
@@ -18,19 +18,16 @@ export const ProjectPage: React.FC = () => {
     [id],
   );
   const [busy, setBusy] = useState<string | null>(null);
-  const [busyError, setBusyError] = useState<string | null>(null);
-  const [lastResult, setLastResult] = useState<string | null>(null);
+  const toast = useToast();
 
   const action = async (label: string, fn: () => Promise<string>) => {
     setBusy(label);
-    setBusyError(null);
-    setLastResult(null);
     try {
       const result = await fn();
-      setLastResult(result);
+      toast.success(result);
       refresh();
     } catch (err) {
-      setBusyError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
     }
@@ -92,13 +89,6 @@ export const ProjectPage: React.FC = () => {
           </Button>
         </div>
       </div>
-
-      {lastResult ? (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-2 rounded-md text-sm">
-          {lastResult}
-        </div>
-      ) : null}
-      <ErrorMessage error={busyError} />
 
       <div className="border-b border-slate-200 flex gap-1 text-sm">
         <Tab to={`/projects/${project.id}`} end>Overview</Tab>

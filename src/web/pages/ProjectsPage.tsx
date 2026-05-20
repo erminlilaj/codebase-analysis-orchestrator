@@ -2,26 +2,36 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import * as api from '../api';
 import { useFetch } from '../hooks';
-import { Card, Button, Spinner, Empty, ErrorMessage } from '../components/ui';
+import { Card, Button, Spinner, Empty, ErrorMessage, ConfirmDialog, useToast } from '../components/ui';
 
 export const ProjectsPage: React.FC = () => {
   const { data: projects, error, loading, refresh } = useFetch(() => api.listProjects(), []);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pending, setPending] = useState<{ id: string; name: string } | null>(null);
+  const toast = useToast();
 
-  const remove = async (id: string, name: string) => {
-    if (!confirm(`Delete project "${name}" and all its data?`)) return;
+  const remove = async (id: string) => {
+    setPending(null);
     setDeletingId(id);
     try {
       await api.deleteProject(id);
       refresh();
     } catch (err) {
-      alert(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     } finally {
       setDeletingId(null);
     }
   };
 
   return (
+    <>
+    <ConfirmDialog
+      open={!!pending}
+      title="Delete project"
+      message={`Delete "${pending?.name}" and all its data? This cannot be undone.`}
+      onConfirm={() => pending && remove(pending.id)}
+      onCancel={() => setPending(null)}
+    />
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Projects</h1>
@@ -76,7 +86,7 @@ export const ProjectsPage: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => remove(p.id, p.name)}
+                      onClick={() => setPending({ id: p.id, name: p.name })}
                       disabled={deletingId === p.id}
                     >
                       {deletingId === p.id ? '…' : 'Delete'}
@@ -89,5 +99,6 @@ export const ProjectsPage: React.FC = () => {
         </Card>
       )}
     </div>
+    </>
   );
 };

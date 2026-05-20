@@ -7,11 +7,13 @@ import {
   Card,
   CardBody,
   CardHeader,
+  ConfirmDialog,
   Empty,
   ErrorMessage,
   Input,
   Spinner,
   Textarea,
+  useToast,
 } from '../../components/ui';
 
 // Questions for the project's language. Shared across all projects of that
@@ -24,6 +26,8 @@ export const QuestionsTab: React.FC<{ language: string }> = ({ language }) => {
   const [draftKey, setDraftKey] = useState('');
   const [draftText, setDraftText] = useState('');
   const [creating, setCreating] = useState(false);
+  const [pending, setPending] = useState<Question | null>(null);
+  const toast = useToast();
 
   const startEdit = (q: Question) => {
     setEditingId(q.id);
@@ -44,18 +48,19 @@ export const QuestionsTab: React.FC<{ language: string }> = ({ language }) => {
       await api.updateQuestion(editingId, { key: draftKey.trim(), text: draftText.trim() });
       cancelEdit();
       langScoped.refresh();
+      toast.success('Question saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
   };
 
   const remove = async (q: Question) => {
-    if (!confirm(`Delete question "${q.key}"? Existing answers are kept; future runs won't include it.`)) return;
+    setPending(null);
     try {
       await api.deleteQuestion(q.id);
       langScoped.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -77,6 +82,14 @@ export const QuestionsTab: React.FC<{ language: string }> = ({ language }) => {
   };
 
   return (
+    <>
+    <ConfirmDialog
+      open={!!pending}
+      title="Delete question"
+      message={`Delete "${pending?.key}"? Existing answers are kept; future runs won't include it.`}
+      onConfirm={() => pending && remove(pending)}
+      onCancel={() => setPending(null)}
+    />
     <div className="mt-4 space-y-3">
       <ErrorMessage error={error} />
 
@@ -160,7 +173,7 @@ export const QuestionsTab: React.FC<{ language: string }> = ({ language }) => {
                     </div>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="sm" onClick={() => startEdit(q)}>Edit</Button>
-                      <Button variant="ghost" size="sm" onClick={() => remove(q)}>Delete</Button>
+                      <Button variant="ghost" size="sm" onClick={() => setPending(q)}>Delete</Button>
                     </div>
                   </div>
                 </CardBody>
@@ -170,5 +183,6 @@ export const QuestionsTab: React.FC<{ language: string }> = ({ language }) => {
         </div>
       )}
     </div>
+    </>
   );
 };

@@ -6,12 +6,14 @@ import {
   Card,
   CardBody,
   CardHeader,
+  ConfirmDialog,
   Empty,
   ErrorMessage,
   Input,
   Spinner,
   Textarea,
   Select,
+  useToast,
 } from '../components/ui';
 
 // Global question catalog — shows all questions across languages.
@@ -24,6 +26,8 @@ export const QuestionsPage: React.FC = () => {
   const [draftKey, setDraftKey] = useState('');
   const [draftText, setDraftText] = useState('');
   const [draftLang, setDraftLang] = useState<string>('cobol');
+  const [pending, setPending] = useState<{ id: string; key: string } | null>(null);
+  const toast = useToast();
 
   const createNew = async () => {
     if (!draftKey.trim() || !draftText.trim()) {
@@ -46,17 +50,25 @@ export const QuestionsPage: React.FC = () => {
     }
   };
 
-  const remove = async (id: string, key: string) => {
-    if (!confirm(`Delete question "${key}"?`)) return;
+  const remove = async (id: string) => {
+    setPending(null);
     try {
       await api.deleteQuestion(id);
       all.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
   return (
+    <>
+    <ConfirmDialog
+      open={!!pending}
+      title="Delete question"
+      message={`Delete question "${pending?.key}"? This cannot be undone.`}
+      onConfirm={() => pending && remove(pending.id)}
+      onCancel={() => setPending(null)}
+    />
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold">Questions</h1>
@@ -110,12 +122,13 @@ export const QuestionsPage: React.FC = () => {
                   </div>
                   <div className="text-sm text-slate-700">{q.text}</div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => remove(q.id, q.key)}>Delete</Button>
+                <Button variant="ghost" size="sm" onClick={() => setPending({ id: q.id, key: q.key })}>Delete</Button>
               </li>
             ))}
           </ul>
         </Card>
       )}
     </div>
+    </>
   );
 };

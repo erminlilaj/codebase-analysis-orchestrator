@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { createContext, useCallback, useContext, useState } from 'react';
 
 export const Card: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ children, className = '' }) => (
   <div className={`bg-white rounded-lg border border-slate-200 shadow-sm ${className}`}>
@@ -119,3 +119,101 @@ export const ErrorMessage: React.FC<{ error: string | null }> = ({ error }) =>
       {error}
     </div>
   ) : null;
+
+// ── Toast system ────────────────────────────────────────────────────────────
+
+type ToastType = 'success' | 'error' | 'info';
+type ToastItem = { id: string; message: string; type: ToastType };
+
+const ToastContext = createContext<(message: string, type: ToastType) => void>(() => {});
+
+const TOAST_COLORS: Record<ToastType, string> = {
+  success: 'bg-green-800 text-white',
+  error: 'bg-red-700 text-white',
+  info: 'bg-slate-800 text-white',
+};
+
+const ToastBubble: React.FC<{ toast: ToastItem; onDismiss: () => void }> = ({ toast, onDismiss }) => (
+  <div
+    className={`flex items-start gap-3 px-4 py-3 rounded-lg shadow-lg text-sm animate-fade-in ${TOAST_COLORS[toast.type]}`}
+    role="alert"
+  >
+    <span className="flex-1">{toast.message}</span>
+    <button onClick={onDismiss} className="opacity-70 hover:opacity-100 text-lg leading-none shrink-0">×</button>
+  </div>
+);
+
+export const ToastProvider: React.FC<React.PropsWithChildren> = ({ children }) => {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+
+  const add = useCallback((message: string, type: ToastType) => {
+    const id = Math.random().toString(36).slice(2);
+    setToasts((t) => [...t, { id, message, type }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000);
+  }, []);
+
+  return (
+    <ToastContext.Provider value={add}>
+      {children}
+      <div className="fixed bottom-5 right-5 flex flex-col gap-2 z-50 w-80 pointer-events-none">
+        {toasts.map((t) => (
+          <div key={t.id} className="pointer-events-auto">
+            <ToastBubble
+              toast={t}
+              onDismiss={() => setToasts((s) => s.filter((x) => x.id !== t.id))}
+            />
+          </div>
+        ))}
+      </div>
+    </ToastContext.Provider>
+  );
+};
+
+export function useToast() {
+  const add = useContext(ToastContext);
+  return {
+    success: (msg: string) => add(msg, 'success'),
+    error: (msg: string) => add(msg, 'error'),
+    info: (msg: string) => add(msg, 'info'),
+  };
+}
+
+// ── Confirm dialog ──────────────────────────────────────────────────────────
+
+type ConfirmDialogProps = {
+  open: boolean;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+};
+
+export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+  open,
+  title,
+  message,
+  confirmLabel = 'Delete',
+  onConfirm,
+  onCancel,
+}) => {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onClick={onCancel}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl max-w-sm w-full mx-4 p-6 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+        <p className="text-sm text-slate-600">{message}</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button variant="danger" onClick={onConfirm}>{confirmLabel}</Button>
+        </div>
+      </div>
+    </div>
+  );
+};

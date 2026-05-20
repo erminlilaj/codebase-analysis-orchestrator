@@ -6,10 +6,12 @@ import {
   Card,
   CardBody,
   CardHeader,
+  ConfirmDialog,
   Empty,
   ErrorMessage,
   Input,
   Spinner,
+  useToast,
 } from '../components/ui';
 
 export const SettingsPage: React.FC = () => {
@@ -18,6 +20,8 @@ export const SettingsPage: React.FC = () => {
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const toast = useToast();
 
   const save = async () => {
     if (!envVar.trim() || !value.trim()) {
@@ -31,6 +35,7 @@ export const SettingsPage: React.FC = () => {
       setValue('');
       setError(null);
       creds.refresh();
+      toast.success('Credential saved.');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -39,16 +44,24 @@ export const SettingsPage: React.FC = () => {
   };
 
   const remove = async (name: string) => {
-    if (!confirm(`Delete credential "${name}"?`)) return;
+    setPendingDelete(null);
     try {
       await api.deleteCredential(name);
       creds.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      toast.error(err instanceof Error ? err.message : String(err));
     }
   };
 
   return (
+    <>
+    <ConfirmDialog
+      open={!!pendingDelete}
+      title="Delete credential"
+      message={`Remove "${pendingDelete}" from the database? The provider using it will stop working until a new value is saved.`}
+      onConfirm={() => pendingDelete && remove(pendingDelete)}
+      onCancel={() => setPendingDelete(null)}
+    />
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Settings</h1>
 
@@ -107,7 +120,7 @@ export const SettingsPage: React.FC = () => {
                     </code>
                     <span className="font-mono text-sm text-slate-500">{c.valuePreview}</span>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => remove(c.envVar)}>
+                  <Button variant="ghost" size="sm" onClick={() => setPendingDelete(c.envVar)}>
                     Delete
                   </Button>
                 </li>
@@ -117,5 +130,6 @@ export const SettingsPage: React.FC = () => {
         </CardBody>
       </Card>
     </div>
+    </>
   );
 };
