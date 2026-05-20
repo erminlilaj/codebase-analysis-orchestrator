@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from './api';
 import type { AnalysisRun, AnalysisJob, AnalysisAnswer } from './types';
 
-export type LogEntry = { message: string; level: 'info' | 'warn' | 'error'; ts: number };
+export type LogEntry = {
+  message: string;
+  level: 'info' | 'warn' | 'error';
+  tag?: 'file' | 'context' | 'unresolved' | 'question' | 'result';
+  ts: number;
+};
 
 /** Fetch + auto-refresh, with loading & error state. */
 export function useFetch<T>(
@@ -98,7 +103,7 @@ type RunDataState = {
 type SseJobUpdate = { type: 'job_update'; job: { id: string; status: string; attempts: number; lastError: string | null; failureKind: string | null } };
 type SseAnswerNew = { type: 'answer_new'; answer: AnalysisAnswer };
 type SseRunUpdate = { type: 'run_update'; status: string; finishedAt: string | null };
-type SseLogEvent  = { type: 'log' } & LogEntry;
+type SseLogEvent = { type: 'log' } & LogEntry;
 type SseEvent = SseJobUpdate | SseAnswerNew | SseRunUpdate | SseLogEvent;
 
 /** Load run/jobs/answers once, then keep them live via SSE while the run is active. */

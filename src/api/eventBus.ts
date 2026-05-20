@@ -4,6 +4,8 @@ export type WorkerLogEvent = {
   type: 'log';
   runId: string;
   level: 'info' | 'warn' | 'error';
+  /** Structural tag — used by the UI to render different message categories distinctly. */
+  tag?: 'file' | 'context' | 'unresolved' | 'question' | 'result';
   message: string;
   ts: number;
 };

@@ -110,11 +110,12 @@ function logWorker(
   message: string,
   level: WorkerLogEvent['level'] = 'info',
   runId?: string,
+  tag?: WorkerLogEvent['tag'],
 ): void {
   if (process.env.NODE_ENV === 'test') return;
   console.log(`[worker] ${message}`);
   if (runId) {
-    eventBus.emit('worker', { type: 'log', runId, level, message, ts: Date.now() } satisfies WorkerLogEvent);
+    eventBus.emit('worker', { type: 'log', runId, level, message, tag, ts: Date.now() } satisfies WorkerLogEvent);
   }
 }
 
@@ -203,6 +204,19 @@ export class WorkerLoop {
       return;
     }
 
+    // Emit per-file activity so the live log panel shows what is being read.
+    logWorker(bundle.mainFile.filename, 'info', job.runId, 'file');
+    for (const ctx of bundle.contextFiles) {
+      logWorker(ctx.filename, 'info', job.runId, 'context');
+    }
+    for (const dep of bundle.unresolvedDependencies) {
+      logWorker(`unresolved: ${dep}`, 'warn', job.runId, 'unresolved');
+    }
+    const questionPreview = job.question.text.length > 80
+      ? `${job.question.text.slice(0, 80)}…`
+      : job.question.text;
+    logWorker(`[${job.question.key}] ${questionPreview}`, 'info', job.runId, 'question');
+
     const provider = this.resolveProvider(job.providerId, overrides);
     if (!provider) {
       await this.handleFailure(job, new Error(`Unknown provider: ${job.providerId}`), 'non_retryable');
@@ -273,7 +287,7 @@ export class WorkerLoop {
         },
       } satisfies WorkerAnswerEvent);
 
-      logWorker(`job ${job.id} done${formatResultInfo(result.metadata)}`, 'info', job.runId);
+      logWorker(`${bundle.mainFile.filename} done${formatResultInfo(result.metadata)}`, 'info', job.runId, 'result');
 
       const newRunStatus = await updateRunStatus(job.runId);
       if (newRunStatus) {

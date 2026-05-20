@@ -134,6 +134,8 @@ export const RunPage: React.FC = () => {
           </CardBody>
         </Card>
 
+        {runActive && jobs ? <ActiveJobsCard jobs={jobs} /> : null}
+
         <LogPanel logs={logs} active={runActive} />
 
         <Card>
@@ -194,11 +196,98 @@ export const RunPage: React.FC = () => {
   );
 };
 
-const LOG_LEVEL_CLS: Record<LogEntry['level'], string> = {
+// ── Currently processing card ──────────────────────────────────────────────
+
+const ActiveJobsCard: React.FC<{ jobs: AnalysisJob[] }> = ({ jobs }) => {
+  const running = jobs.filter((j) => j.status === 'running' || j.status === 'claimed');
+  const [, setTick] = useState(0);
+
+  // Tick every second so elapsed timers update.
+  useEffect(() => {
+    if (running.length === 0) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [running.length]);
+
+  if (running.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Spinner className="text-violet-600" />
+          <span className="font-medium text-sm">Processing ({running.length})</span>
+        </div>
+      </CardHeader>
+      <ul className="divide-y divide-slate-100">
+        {running.map((j) => {
+          const elapsed = j.startedAt
+            ? Math.floor((Date.now() - new Date(j.startedAt).getTime()) / 1000)
+            : null;
+          return (
+            <li key={j.id} className="px-5 py-2.5 flex items-center justify-between gap-3 text-sm">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-violet-500 shrink-0">▶</span>
+                <code className="bg-violet-50 text-violet-800 text-xs px-2 py-0.5 rounded shrink-0">
+                  {j.question?.key ?? '—'}
+                </code>
+                <span className="text-xs text-slate-500 shrink-0">{j.providerId}</span>
+                <span className="text-xs text-slate-400 font-mono truncate">{j.id}</span>
+              </div>
+              {elapsed !== null ? (
+                <span className="text-xs text-slate-400 shrink-0 font-mono">{elapsed}s</span>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+};
+
+// ── Log panel ───────────────────────────────────────────────────────────────
+
+type TagStyle = { indent: string; icon: string; color: string };
+
+const TAG_STYLE: Record<NonNullable<LogEntry['tag']>, TagStyle> = {
+  file:       { indent: '',    icon: '📄', color: 'text-slate-100' },
+  context:    { indent: 'pl-5', icon: '↳', color: 'text-slate-400' },
+  unresolved: { indent: 'pl-5', icon: '✗', color: 'text-amber-400' },
+  question:   { indent: '',    icon: '?', color: 'text-violet-300' },
+  result:     { indent: '',    icon: '✓', color: 'text-green-400'  },
+};
+
+const LEVEL_COLOR: Record<LogEntry['level'], string> = {
   info:  'text-slate-300',
   warn:  'text-amber-400',
   error: 'text-red-400',
 };
+
+function renderLogLine(l: LogEntry, i: number) {
+  const ts = (
+    <span className="text-slate-600 select-none mr-2 shrink-0">
+      {new Date(l.ts).toLocaleTimeString()}
+    </span>
+  );
+
+  if (l.tag) {
+    const s = TAG_STYLE[l.tag];
+    return (
+      <div key={i} className={`leading-5 flex items-baseline gap-1 ${s.indent}`}>
+        {ts}
+        <span className={`${s.color} select-none`}>{s.icon}</span>
+        <span className={s.color}>{l.message}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div key={i} className={`leading-5 ${LEVEL_COLOR[l.level]}`}>
+      {ts}
+      {l.message}
+    </div>
+  );
+}
 
 const LogPanel: React.FC<{ logs: LogEntry[]; active: boolean }> = ({ logs, active }) => {
   const [open, setOpen] = useState(true);
@@ -215,10 +304,10 @@ const LogPanel: React.FC<{ logs: LogEntry[]; active: boolean }> = ({ logs, activ
           className="flex items-center gap-2 w-full text-left"
           onClick={() => setOpen((o) => !o)}
         >
-          <span className="font-medium text-sm">Live logs</span>
+          <span className="font-medium text-sm">Activity log</span>
           {active ? (
             <span className="flex items-center gap-1 text-xs text-amber-700">
-              <Spinner className="text-amber-700" /> streaming
+              <Spinner className="text-amber-700" /> live
             </span>
           ) : (
             <span className="text-xs text-slate-400">run finished</span>
@@ -227,20 +316,13 @@ const LogPanel: React.FC<{ logs: LogEntry[]; active: boolean }> = ({ logs, activ
         </button>
       </CardHeader>
       {open ? (
-        <div className="bg-slate-900 rounded-b-lg max-h-72 overflow-auto p-4 font-mono text-xs">
+        <div className="bg-slate-900 rounded-b-lg max-h-80 overflow-auto p-4 font-mono text-xs">
           {logs.length === 0 ? (
             <div className="text-slate-500">
-              {active ? 'Waiting for worker activity…' : 'No logs captured.'}
+              {active ? 'Waiting for worker activity…' : 'No activity captured.'}
             </div>
           ) : (
-            logs.map((l, i) => (
-              <div key={i} className={`leading-5 ${LOG_LEVEL_CLS[l.level]}`}>
-                <span className="text-slate-600 select-none mr-2">
-                  {new Date(l.ts).toLocaleTimeString()}
-                </span>
-                {l.message}
-              </div>
-            ))
+            logs.map((l, i) => renderLogLine(l, i))
           )}
           <div ref={bottomRef} />
         </div>

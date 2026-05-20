@@ -50,6 +50,7 @@ export type AnalysisJob = {
   attempts: number;
   lastError: string | null;
   failureKind: string | null;
+  startedAt: string | null;
   createdAt: string;
   question?: Question;
   answer?: AnalysisAnswer;
