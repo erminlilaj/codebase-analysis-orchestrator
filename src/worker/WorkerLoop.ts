@@ -9,7 +9,13 @@ import { classifyError, shouldRetry, type FailureKind } from '../core/jobs/retry
 import { updateRunStatus } from '../core/runs/updateRunStatus';
 import type { ProviderConfigOverrides } from '../providers/providerRegistry';
 import { loadProviderCredentials } from '../core/settings/providerCredentials';
-import { eventBus, type WorkerLogEvent } from '../api/eventBus';
+import {
+  eventBus,
+  type WorkerLogEvent,
+  type WorkerJobEvent,
+  type WorkerAnswerEvent,
+  type WorkerRunEvent,
+} from '../api/eventBus';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -173,6 +179,13 @@ export class WorkerLoop {
 
     if (!job) return;
 
+    // Job is already 'running' in the DB (set by claimNextJobs); tell SSE clients.
+    eventBus.emit('worker', {
+      type: 'job_update',
+      runId: job.runId,
+      job: { id: job.id, status: 'running', attempts: job.attempts, lastError: null, failureKind: null },
+    } satisfies WorkerJobEvent);
+
     const overrides = await this.buildProviderOverrides(job);
     logWorker(
       `job ${job.id} · ${job.providerId}` +
@@ -225,7 +238,7 @@ export class WorkerLoop {
         return;
       }
 
-      await prisma.analysisAnswer.create({
+      const createdAnswer = await prisma.analysisAnswer.create({
         data: {
           jobId: job.id,
           rawOutput: result.rawOutput,
@@ -239,8 +252,38 @@ export class WorkerLoop {
         where: { id: jobId },
         data: { status: 'completed' as any, finishedAt: new Date() },
       });
+
+      eventBus.emit('worker', {
+        type: 'job_update',
+        runId: job.runId,
+        job: { id: job.id, status: 'completed', attempts: job.attempts, lastError: null, failureKind: null },
+      } satisfies WorkerJobEvent);
+
+      eventBus.emit('worker', {
+        type: 'answer_new',
+        runId: job.runId,
+        answer: {
+          id: createdAnswer.id,
+          jobId: createdAnswer.jobId,
+          rawOutput: createdAnswer.rawOutput,
+          parsed: createdAnswer.parsed,
+          modelId: createdAnswer.modelId,
+          tokensUsed: createdAnswer.tokensUsed,
+          createdAt: createdAnswer.createdAt.toISOString(),
+        },
+      } satisfies WorkerAnswerEvent);
+
       logWorker(`job ${job.id} done${formatResultInfo(result.metadata)}`, 'info', job.runId);
-      await updateRunStatus(job.runId);
+
+      const newRunStatus = await updateRunStatus(job.runId);
+      if (newRunStatus) {
+        eventBus.emit('worker', {
+          type: 'run_update',
+          runId: job.runId,
+          status: newRunStatus,
+          finishedAt: new Date().toISOString(),
+        } satisfies WorkerRunEvent);
+      }
     } catch (err) {
       await this.handleFailure(job, err);
     } finally {
@@ -269,6 +312,11 @@ export class WorkerLoop {
           startedAt: null,
         },
       });
+      eventBus.emit('worker', {
+        type: 'job_update',
+        runId: job.runId,
+        job: { id: job.id, status: 'pending', attempts: newAttempts, lastError, failureKind: kind },
+      } satisfies WorkerJobEvent);
       logWorker(
         `job ${job.id} retry ${newAttempts}/${this.config.maxAttempts} (${kind}): ${lastError}`,
         'warn',
@@ -285,8 +333,21 @@ export class WorkerLoop {
           finishedAt: new Date(),
         },
       });
+      eventBus.emit('worker', {
+        type: 'job_update',
+        runId: job.runId,
+        job: { id: job.id, status: 'failed', attempts: newAttempts, lastError, failureKind: kind },
+      } satisfies WorkerJobEvent);
       logWorker(`job ${job.id} FAILED (${kind}): ${lastError}`, 'error', job.runId);
-      await updateRunStatus(job.runId);
+      const newRunStatus = await updateRunStatus(job.runId);
+      if (newRunStatus) {
+        eventBus.emit('worker', {
+          type: 'run_update',
+          runId: job.runId,
+          status: newRunStatus,
+          finishedAt: new Date().toISOString(),
+        } satisfies WorkerRunEvent);
+      }
     }
   }
 

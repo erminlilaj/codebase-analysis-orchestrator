@@ -80,6 +80,10 @@ export const createRun = (
   },
 ) => request<RunCreateResult>('POST', `/projects/${projectId}/runs`, body);
 export const getRun = (runId: string) => request<AnalysisRun>('GET', `/runs/${runId}`);
+export const cancelRun = (runId: string) =>
+  request<{ cancelledJobCount: number }>('POST', `/runs/${runId}/cancel`);
+export const retryRun = (runId: string) =>
+  request<{ retriedJobIds: string[]; count: number }>('POST', `/runs/${runId}/retry`);
 export const listRunJobs = (runId: string, status?: string) =>
   request<AnalysisJob[]>('GET', `/runs/${runId}/jobs${status ? `?status=${status}` : ''}`);
 export const listRunAnswers = (runId: string) =>

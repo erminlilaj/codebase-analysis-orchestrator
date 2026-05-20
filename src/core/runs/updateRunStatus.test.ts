@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../../db/prisma', () => ({
   prisma: {
     analysisJob: { count: vi.fn() },
-    analysisRun: { update: vi.fn() },
+    analysisRun: { findUnique: vi.fn(), update: vi.fn() },
   },
 }));
 
@@ -11,10 +11,13 @@ import { updateRunStatus } from './updateRunStatus';
 import { prisma } from '../../db/prisma';
 
 const mockCount = vi.mocked(prisma.analysisJob.count);
+const mockRunFindUnique = vi.mocked(prisma.analysisRun.findUnique);
 const mockRunUpdate = vi.mocked(prisma.analysisRun.update);
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // Default: run exists and is in a cancellable state
+  mockRunFindUnique.mockResolvedValue({ status: 'running' } as any);
   mockRunUpdate.mockResolvedValue({} as any);
 });
 
@@ -80,5 +83,26 @@ describe('updateRunStatus', () => {
     mockCounts(5, 2, 0, 0);
     await updateRunStatus('run-1');
     expect(mockRunUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not overwrite a cancelled run', async () => {
+    mockRunFindUnique.mockResolvedValue({ status: 'cancelled' } as any);
+    mockCounts(5, 0, 0, 0);
+    await updateRunStatus('run-1');
+    expect(mockRunUpdate).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the run does not exist', async () => {
+    mockRunFindUnique.mockResolvedValue(null);
+    mockCounts(5, 0, 0, 0);
+    const result = await updateRunStatus('run-1');
+    expect(result).toBeNull();
+    expect(mockRunUpdate).not.toHaveBeenCalled();
+  });
+
+  it('returns the new status when the run transitions to completed', async () => {
+    mockCounts(3, 0, 0, 0);
+    const result = await updateRunStatus('run-1');
+    expect(result).toBe('completed');
   });
 });

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { JobStatus } from '@prisma/client';
 import { prisma } from '../../db/prisma';
 import { retryJobs } from '../../core/jobs/retryJobs';
-import { eventBus, type WorkerLogEvent } from '../eventBus';
+import { eventBus, type WorkerLogEvent, type WorkerRunEvent } from '../eventBus';
 
 export async function jobRoutes(app: FastifyInstance): Promise<void> {
   app.get<{ Params: { runId: string } }>('/runs/:runId', async (req, reply) => {
@@ -90,6 +90,34 @@ export async function jobRoutes(app: FastifyInstance): Promise<void> {
     });
     if (!job) return reply.code(404).send({ error: 'Job not found' });
     return job;
+  });
+
+  app.post<{ Params: { runId: string } }>('/runs/:runId/cancel', async (req, reply) => {
+    const run = await prisma.analysisRun.findUnique({ where: { id: req.params.runId } });
+    if (!run) return reply.code(404).send({ error: 'Run not found' });
+    if (run.status !== 'pending' && run.status !== 'running') {
+      return reply.code(400).send({ error: `Cannot cancel a run with status: ${run.status}` });
+    }
+
+    const { count } = await prisma.analysisJob.updateMany({
+      where: { runId: req.params.runId, status: { in: ['pending', 'claimed'] } },
+      data: { status: 'cancelled', finishedAt: new Date() },
+    });
+
+    const finishedAt = new Date();
+    await prisma.analysisRun.update({
+      where: { id: req.params.runId },
+      data: { status: 'cancelled', finishedAt },
+    });
+
+    eventBus.emit('worker', {
+      type: 'run_update',
+      runId: req.params.runId,
+      status: 'cancelled',
+      finishedAt: finishedAt.toISOString(),
+    } satisfies WorkerRunEvent);
+
+    return { cancelledJobCount: count };
   });
 
   app.get<{ Params: { runId: string } }>('/runs/:runId/stream', async (req, reply) => {

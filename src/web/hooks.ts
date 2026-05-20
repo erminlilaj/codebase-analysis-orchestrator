@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import * as api from './api';
+import type { AnalysisRun, AnalysisJob, AnalysisAnswer } from './types';
 
 export type LogEntry = { message: string; level: 'info' | 'warn' | 'error'; ts: number };
 
@@ -78,4 +80,84 @@ export function useWorkerLogs(runId: string, enabled: boolean): LogEntry[] {
   }, [runId, enabled]);
 
   return logs;
+}
+
+// ---------------------------------------------------------------------------
+// useRunData — initial REST load + single SSE connection for live updates
+// ---------------------------------------------------------------------------
+
+type RunDataState = {
+  run: AnalysisRun | null;
+  jobs: AnalysisJob[] | null;
+  answers: AnalysisAnswer[] | null;
+  logs: LogEntry[];
+  error: string | null;
+  refresh: () => void;
+};
+
+type SseJobUpdate = { type: 'job_update'; job: { id: string; status: string; attempts: number; lastError: string | null; failureKind: string | null } };
+type SseAnswerNew = { type: 'answer_new'; answer: AnalysisAnswer };
+type SseRunUpdate = { type: 'run_update'; status: string; finishedAt: string | null };
+type SseLogEvent  = { type: 'log' } & LogEntry;
+type SseEvent = SseJobUpdate | SseAnswerNew | SseRunUpdate | SseLogEvent;
+
+/** Load run/jobs/answers once, then keep them live via SSE while the run is active. */
+export function useRunData(runId: string): RunDataState {
+  const [run, setRun]       = useState<AnalysisRun | null>(null);
+  const [jobs, setJobs]     = useState<AnalysisJob[] | null>(null);
+  const [answers, setAnswers] = useState<AnalysisAnswer[] | null>(null);
+  const [logs, setLogs]     = useState<LogEntry[]>([]);
+  const [error, setError]   = useState<string | null>(null);
+  const [tick, setTick]     = useState(0);
+
+  const refresh = useCallback(() => setTick((n) => n + 1), []);
+
+  // Initial load (re-runs on manual refresh)
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([api.getRun(runId), api.listRunJobs(runId), api.listRunAnswers(runId)])
+      .then(([r, j, a]) => {
+        if (cancelled) return;
+        setRun(r);
+        setJobs(j);
+        setAnswers(a);
+        setError(null);
+      })
+      .catch((e: Error) => { if (!cancelled) setError(e.message); });
+    return () => { cancelled = true; };
+  }, [runId, tick]);
+
+  // SSE — only while the run is active; a new connection opens if the run goes
+  // from finished back to active (e.g. retry).
+  const active = run?.status === 'pending' || run?.status === 'running';
+
+  useEffect(() => {
+    if (!active) return;
+    setLogs([]);
+    const es = new EventSource(`/api/runs/${runId}/stream`);
+    es.onmessage = (e: MessageEvent<string>) => {
+      try {
+        const evt = JSON.parse(e.data) as SseEvent;
+        switch (evt.type) {
+          case 'job_update':
+            setJobs((prev) =>
+              prev?.map((j) => (j.id === evt.job.id ? { ...j, ...evt.job } : j)) ?? prev,
+            );
+            break;
+          case 'answer_new':
+            setAnswers((prev) => (prev ? [...prev, evt.answer] : [evt.answer]));
+            break;
+          case 'run_update':
+            setRun((prev) => (prev ? { ...prev, status: evt.status as AnalysisRun['status'], finishedAt: evt.finishedAt } : prev));
+            break;
+          case 'log':
+            setLogs((prev) => [...prev.slice(-499), { message: evt.message, level: evt.level, ts: evt.ts }]);
+            break;
+        }
+      } catch { /* malformed — ignore */ }
+    };
+    return () => es.close();
+  }, [runId, active]);
+
+  return { run, jobs, answers, logs, error, refresh };
 }

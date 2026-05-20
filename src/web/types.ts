@@ -27,7 +27,7 @@ export type Question = {
   createdAt: string;
 };
 
-export type JobStatus = 'pending' | 'claimed' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type JobStatus = 'pending' | 'claimed' | 'running' | 'completed' | 'failed' | 'cancelled' | 'blocked';
 
 export type AnalysisRun = {
   id: string;

@@ -223,12 +223,13 @@ Notable fields:
 src/
   api/                          REST layer
     server.ts                   Fastify factory + listen()
+    eventBus.ts                 In-process EventEmitter bridging worker → SSE clients
     routes/                     Thin route modules, one per resource
       projects.routes.ts
       files.routes.ts
       bundles.routes.ts
       questions.routes.ts
-      jobs.routes.ts
+      jobs.routes.ts            Also hosts /runs/:id/cancel and /runs/:id/stream (SSE)
       answers.routes.ts
       exports.routes.ts
 
@@ -300,7 +301,7 @@ prisma/
     App.tsx                     Router
     api.ts                      Fetch wrapper for /api/*
     types.ts                    API response types
-    hooks.ts                    useFetch with polling
+    hooks.ts                    useFetch, useRunData (SSE-driven live state), useWorkerLogs
     package.json                Marks subtree as ESM
     components/                 Layout, ui primitives, FileBrowser modal
     pages/                      ProjectsPage, NewProjectPage, ProjectPage,
@@ -494,6 +495,8 @@ routes live under `/projects/:id/...`; run-scoped routes under `/runs/:runId/...
 | `GET` | `/runs/:runId/stale-jobs` | List jobs whose question changed after generation |
 | `GET` | `/runs/:runId/answers` | List answers for run |
 | `POST` | `/runs/:runId/retry` | Re-queue failed jobs `{ jobIds? }` — all failed jobs if omitted |
+| `POST` | `/runs/:runId/cancel` | Cancel run — marks pending/claimed jobs as `cancelled`, sets run status to `cancelled` |
+| `GET` | `/runs/:runId/stream` | **SSE stream** — pushes `job_update`, `answer_new`, `run_update`, and `log` events while the run is active |
 | `GET` | `/jobs/:id` | Get job with question + answer |
 | `GET` | `/jobs/:id/answer` | Get just the answer |
 | `GET` | `/projects/:id/exports` | List past exports |
@@ -587,7 +590,7 @@ Open <http://127.0.0.1:5173>. Features:
 - **Files** view with per-language counts and filter
 - **Bundles** view showing main file + resolved context + unresolved deps
 - **New run** form — pick the provider, and for OpenCode set the model + agent per run (saved on the run)
-- **Run detail** with live progress bar (polls every 1.5s while jobs in flight), job statuses, recent answers
+- **Run detail** — live progress bar, job table, recent answers and a **live log panel** — all driven by a single Server-Sent Events connection (no polling). A **Cancel run** button stops pending jobs immediately.
 - **Answer viewer** — raw output + parsed JSON
 - **Exports** tab — generate JSON/CSV/Markdown, see past exports
 - **Settings** — store provider API keys (e.g. `DEEPSEEK_API_KEY`); masked in the UI, injected into the OpenCode process at run time
@@ -758,6 +761,9 @@ Multi-agent coordination notes (worklog, decisions, proposals) live under
 | I: Re-run failed jobs | Done | `POST /runs/:runId/retry` resets failed jobs to `pending` and reopens the run; optional `jobIds` body scopes the retry |
 | Extra: Terminal UI | Complete | Ink-based dashboard at `npm run tui` |
 | Extra: Web UI | Complete | React + Vite + Tailwind at `npm run web`, full feature set |
+| Extra: Real-time SSE | Complete | `GET /runs/:id/stream` pushes `job_update`, `answer_new`, `run_update`, `log` events — web UI uses a single EventSource per run page, no polling |
+| Extra: Cancel run | Complete | `POST /runs/:id/cancel` — stops pending jobs, marks run cancelled; guarded against overwriting by `updateRunStatus` |
+| Extra: UI polish | Complete | Toast notifications, ConfirmDialog modals, live log panel in run detail; API input validation hardened |
 
 See [agents/STATE.md](agents/STATE.md) for the live status snapshot and
 [IMPLEMENTATION_STEPS.md](IMPLEMENTATION_STEPS.md) for the full plan.
