@@ -35,6 +35,7 @@ export type AnalysisRun = {
   status: JobStatus;
   startedAt: string | null;
   finishedAt: string | null;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 };
 

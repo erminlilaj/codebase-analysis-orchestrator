@@ -97,6 +97,21 @@ function readProviderSettings(metadata: unknown): ProviderConfigOverrides | unde
   return Object.keys(overrides).length > 0 ? overrides : undefined;
 }
 
+// Worker activity logging — silenced under NODE_ENV=test to keep tests quiet.
+function logWorker(message: string): void {
+  if (process.env.NODE_ENV !== 'test') console.log(`[worker] ${message}`);
+}
+
+// Formats the trailing "· N tokens · Nms · parse=…" suffix for a result log.
+function formatResultInfo(metadata: Record<string, unknown> | undefined): string {
+  if (!metadata) return '';
+  const parts: string[] = [];
+  if (typeof metadata.tokensUsed === 'number') parts.push(`${metadata.tokensUsed} tokens`);
+  if (typeof metadata.durationMs === 'number') parts.push(`${metadata.durationMs}ms`);
+  if (typeof metadata.parseStatus === 'string') parts.push(`parse=${metadata.parseStatus}`);
+  return parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
+}
+
 // ---------------------------------------------------------------------------
 // WorkerLoop
 // ---------------------------------------------------------------------------
@@ -126,6 +141,7 @@ export class WorkerLoop {
     await recoverStaleJobs(this.config.staleTimeoutSeconds);
     const ids = await claimNextJobs(this.config.concurrency);
     if (ids.length > 0) {
+      logWorker(`claimed ${ids.length} job(s)`);
       await Promise.allSettled(ids.map((id) => this.processJob(id)));
     }
   }
@@ -147,6 +163,13 @@ export class WorkerLoop {
 
     if (!job) return;
 
+    const overrides = await this.buildProviderOverrides(job);
+    logWorker(
+      `job ${job.id} · ${job.providerId}` +
+        (overrides?.model ? ` · ${overrides.model}` : '') +
+        ` · q=${job.question.key}`,
+    );
+
     let bundle: AnalysisBundle;
     try {
       bundle = reconstructBundle(job);
@@ -155,10 +178,7 @@ export class WorkerLoop {
       return;
     }
 
-    const provider = this.resolveProvider(
-      job.providerId,
-      await this.buildProviderOverrides(job),
-    );
+    const provider = this.resolveProvider(job.providerId, overrides);
     if (!provider) {
       await this.handleFailure(job, new Error(`Unknown provider: ${job.providerId}`), 'non_retryable');
       return;
@@ -207,6 +227,7 @@ export class WorkerLoop {
         where: { id: jobId },
         data: { status: 'completed' as any, finishedAt: new Date() },
       });
+      logWorker(`job ${job.id} done${formatResultInfo(result.metadata)}`);
       await updateRunStatus(job.runId);
     } catch (err) {
       await this.handleFailure(job, err);
@@ -236,6 +257,9 @@ export class WorkerLoop {
           startedAt: null,
         },
       });
+      logWorker(
+        `job ${job.id} retry ${newAttempts}/${this.config.maxAttempts} (${kind}): ${lastError}`,
+      );
     } else {
       await prisma.analysisJob.update({
         where: { id: job.id },
@@ -247,6 +271,7 @@ export class WorkerLoop {
           finishedAt: new Date(),
         },
       });
+      logWorker(`job ${job.id} FAILED (${kind}): ${lastError}`);
       await updateRunStatus(job.runId);
     }
   }

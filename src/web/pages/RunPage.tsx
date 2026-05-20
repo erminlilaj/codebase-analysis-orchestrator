@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import * as api from '../api';
+import { answerSummary } from '../../core/answers/answerSummary';
 import { useFetch } from '../hooks';
 import type { AnalysisJob } from '../types';
 import {
@@ -41,6 +42,10 @@ export const RunPage: React.FC = () => {
   if (run.error) return <ErrorMessage error={run.error} />;
   if (!run.data) return <div className="flex items-center gap-2 text-slate-500"><Spinner /> Loading…</div>;
 
+  const providerSettings = run.data.metadata?.providerSettings as
+    | { model?: string; agent?: string }
+    | undefined;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -59,6 +64,16 @@ export const RunPage: React.FC = () => {
             <span>started: {run.data.startedAt ? new Date(run.data.startedAt).toLocaleString() : '—'}</span>
             <span className="ml-3">finished: {run.data.finishedAt ? new Date(run.data.finishedAt).toLocaleString() : '—'}</span>
           </div>
+          {providerSettings && (providerSettings.model || providerSettings.agent) ? (
+            <div className="text-xs text-slate-500 mt-0.5">
+              {providerSettings.model ? (
+                <span>model: <code className="text-xs">{providerSettings.model}</code></span>
+              ) : null}
+              {providerSettings.agent ? (
+                <span className="ml-3">agent: <code className="text-xs">{providerSettings.agent}</code></span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -130,7 +145,9 @@ export const RunPage: React.FC = () => {
                       {new Date(a.createdAt).toLocaleTimeString()}
                     </span>
                   </div>
-                  <div className="text-sm text-slate-700 line-clamp-2">{a.rawOutput}</div>
+                  <div className="text-sm text-slate-700 line-clamp-2">
+                    {answerSummary(a.parsed, a.rawOutput)}
+                  </div>
                 </Link>
               </li>
             ))}
@@ -142,20 +159,28 @@ export const RunPage: React.FC = () => {
 };
 
 const JobRow: React.FC<{ job: AnalysisJob }> = ({ job }) => (
-  <li className="px-5 py-2 flex items-center justify-between hover:bg-slate-50 text-sm">
-    <div className="flex items-center gap-3 min-w-0">
-      <StatusBadge status={job.status} />
-      <code className="text-xs text-violet-700">{job.question?.key ?? '—'}</code>
-      <span className="text-xs text-slate-500 font-mono truncate">{job.id}</span>
+  <li className="px-5 py-2 hover:bg-slate-50 text-sm">
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0">
+        <StatusBadge status={job.status} />
+        <code className="text-xs text-violet-700">{job.question?.key ?? '—'}</code>
+        <span className="text-xs text-slate-400">{job.providerId}</span>
+        <span className="text-xs text-slate-400 font-mono truncate">{job.id}</span>
+      </div>
+      <div className="flex gap-2 items-center text-xs text-slate-500 shrink-0">
+        {job.attempts > 0 ? <span>attempts: {job.attempts}</span> : null}
+        {job.failureKind ? (
+          <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded">{job.failureKind}</span>
+        ) : null}
+        {job.answer ? (
+          <Link to={`/jobs/${job.id}/answer`} className="text-violet-700 hover:underline">
+            view answer
+          </Link>
+        ) : null}
+      </div>
     </div>
-    <div className="flex gap-2 items-center text-xs text-slate-500">
-      {job.attempts > 0 ? <span>attempts: {job.attempts}</span> : null}
-      {job.lastError ? <span className="text-red-600 truncate max-w-xs" title={job.lastError}>error</span> : null}
-      {job.answer ? (
-        <Link to={`/jobs/${job.id}/answer`} className="text-violet-700 hover:underline">
-          view answer
-        </Link>
-      ) : null}
-    </div>
+    {job.lastError ? (
+      <div className="mt-1 text-xs text-red-600 break-words">{job.lastError}</div>
+    ) : null}
   </li>
 );

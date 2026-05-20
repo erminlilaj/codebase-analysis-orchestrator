@@ -4,6 +4,9 @@ import {
   OpenCodeProviderUnavailableError,
   OpenCodeShellProvider,
   buildOpenCodeArgs,
+  buildOpenCodePartsQuery,
+  buildPtyCommand,
+  extractOpenCodeSessionId,
 } from './OpenCodeShellProvider';
 import type { ProviderAnalysisInput } from '../common/AnalysisProvider';
 import type { OpenCodeShellProviderConfig } from './OpenCodeShellProvider';
@@ -177,5 +180,38 @@ describe('buildOpenCodeArgs', () => {
       '--dangerously-skip-permissions',
       'prompt',
     ]);
+  });
+});
+
+describe('buildPtyCommand', () => {
+  it('quotes arguments for script -qec without exposing shell metacharacters', () => {
+    const command = buildPtyCommand('/home/me/.opencode/bin/opencode', [
+      'run',
+      '--dir',
+      '/tmp/work space/job-1',
+      '--format',
+      'json',
+      "Say 'hi' && do not run commands",
+    ]);
+
+    expect(command).toBe(
+      "/home/me/.opencode/bin/opencode run --dir '/tmp/work space/job-1' --format json 'Say '\\''hi'\\'' && do not run commands'",
+    );
+  });
+});
+
+describe('OpenCode session helpers', () => {
+  it('extracts the session id from json event output', () => {
+    expect(
+      extractOpenCodeSessionId(
+        '{"type":"step_start","sessionID":"ses_abc123","part":{"type":"step-start"}}',
+      ),
+    ).toBe('ses_abc123');
+  });
+
+  it('builds a quoted parts query for OpenCode db', () => {
+    expect(buildOpenCodePartsQuery("ses_a'b")).toBe(
+      "select part.message_id as message_id, part.data as data, message.data as message_data from part join message on message.id = part.message_id where part.session_id = 'ses_a''b' order by part.time_created",
+    );
   });
 });

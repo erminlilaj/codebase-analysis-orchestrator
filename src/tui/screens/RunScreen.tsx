@@ -4,6 +4,7 @@ import Spinner from 'ink-spinner';
 import type { ApiClient } from '../api';
 import type { NavigationApi } from '../navigation';
 import type { AnalysisRun, AnalysisJob, AnalysisAnswer } from '../types';
+import { answerSummary } from '../../core/answers/answerSummary';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { ProgressBar } from '../components/ProgressBar';
@@ -128,7 +129,7 @@ export const RunScreen: React.FC<{
             <Box width={20}>
               <Text dimColor>{a.job?.question?.key ?? '—'}</Text>
             </Box>
-            <Text>{truncate(a.rawOutput.replace(/\s+/g, ' '), 50)}</Text>
+            <Text>{truncate(answerSummary(a.parsed, a.rawOutput).replace(/\s+/g, ' '), 50)}</Text>
           </Box>
         ))}
       </Box>

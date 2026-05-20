@@ -11,6 +11,7 @@ import {
   Empty,
   ErrorMessage,
   Input,
+  Select,
   Spinner,
   StatusBadge,
 } from '../../components/ui';
@@ -153,10 +154,27 @@ const NewRunForm: React.FC<{
       <CardBody className="space-y-4">
         <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">Provider</label>
-          <Input value={providerId} onChange={(e) => setProviderId(e.target.value)} placeholder="stub" />
-          <p className="text-xs text-slate-500 mt-1">
-            Known: <code className="text-xs">stub</code> (default), <code className="text-xs">bob</code>, <code className="text-xs">opencode</code>.
-          </p>
+          <Select
+            className="w-full"
+            value={providerId}
+            onChange={(e) => setProviderId(e.target.value)}
+          >
+            {providers.data ? (
+              Object.values(providers.data).map((p) => (
+                <option key={p.providerId} value={p.providerId} disabled={!p.available}>
+                  {p.providerId}
+                  {p.available ? '' : ' — unavailable'}
+                </option>
+              ))
+            ) : (
+              <option value={providerId}>{providerId}</option>
+            )}
+          </Select>
+          {providers.data?.[providerId] && !providers.data[providerId].available ? (
+            <p className="text-xs text-red-600 mt-1">
+              {providers.data[providerId].reason ?? 'Provider unavailable'}
+            </p>
+          ) : null}
         </div>
 
         {isOpenCode ? (

@@ -1,5 +1,6 @@
 import { execFile } from 'child_process';
 import type { ExecFileException } from 'child_process';
+import path from 'path';
 import type {
   AnalysisProvider,
   ProviderAnalysisInput,
@@ -67,19 +68,20 @@ export class OpenCodeShellProvider implements AnalysisProvider {
       throw new OpenCodeProviderUnavailableError(health);
     }
 
+    const workspacePath = path.resolve(input.workspacePath);
     const prompt = await buildOpenCodePrompt({
       bundle: input.bundle,
       question: input.question,
       mode: this.config.promptFileMode ?? 'file-reference',
       maxInlineBytes: this.config.maxInlineBytes,
-      workspacePath: input.workspacePath,
+      workspacePath,
     });
 
-    const args = buildOpenCodeArgs(prompt.prompt, input.workspacePath, this.config);
+    const args = buildOpenCodeArgs(prompt.prompt, workspacePath, this.config);
     const output = await this.executor({
       command: this.config.command,
       args,
-      cwd: input.workspacePath,
+      cwd: workspacePath,
       env: buildOpenCodeEnv(this.config.extraEnv),
       timeoutMs: this.config.timeoutMs,
       maxBufferBytes: this.config.maxBufferMb * 1024 * 1024,
@@ -156,11 +158,12 @@ async function defaultOpenCodeShellExecutor(
   request: OpenCodeShellExecutionRequest,
 ): Promise<OpenCodeProcessOutput> {
   const started = Date.now();
+  const ptyCommand = buildPtyCommand(request.command, request.args);
 
   return new Promise((resolve) => {
     execFile(
-      request.command,
-      request.args,
+      'script',
+      ['-qec', ptyCommand, '/dev/null'],
       {
         cwd: request.cwd,
         env: request.env,
@@ -168,11 +171,16 @@ async function defaultOpenCodeShellExecutor(
         maxBuffer: request.maxBufferBytes,
         windowsHide: true,
       },
-      (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {
+      async (error: ExecFileException | null, stdout: string | Buffer, stderr: string | Buffer) => {
         const durationMs = Date.now() - started;
         const execError = error as (ExecFileException & { killed?: boolean; signal?: string }) | null;
+        const stdoutString = await hydrateOpenCodeStdout(
+          request,
+          bufferToString(stdout),
+          Boolean(execError?.killed && execError.signal === 'SIGTERM'),
+        ).catch(() => bufferToString(stdout));
         resolve({
-          stdout: bufferToString(stdout),
+          stdout: stdoutString,
           stderr: bufferToString(stderr),
           exitCode: execError?.code === undefined ? 0 : codeToExitCode(execError.code),
           timedOut: Boolean(execError?.killed && execError.signal === 'SIGTERM'),
@@ -181,6 +189,156 @@ async function defaultOpenCodeShellExecutor(
       },
     );
   });
+}
+
+async function hydrateOpenCodeStdout(
+  request: OpenCodeShellExecutionRequest,
+  stdout: string,
+  timedOut: boolean,
+): Promise<string> {
+  if (timedOut || stdout.includes('"type":"text"') || stdout.includes('"type": "text"')) return stdout;
+
+  const sessionId = extractOpenCodeSessionId(stdout);
+  if (!sessionId) return stdout;
+
+  const query = buildOpenCodePartsQuery(sessionId);
+  const { stdout: dbStdout } = await execFilePromise(request.command, ['db', '--format', 'json', query], {
+    cwd: request.cwd,
+    env: request.env,
+    timeout: Math.min(request.timeoutMs, 10000),
+    maxBuffer: request.maxBufferBytes,
+    windowsHide: true,
+  });
+
+  const hydrated = buildHydratedOpenCodeEvent(dbStdout);
+  return hydrated ? `${stdout.trimEnd()}\n${JSON.stringify(hydrated)}\n` : stdout;
+}
+
+export function extractOpenCodeSessionId(stdout: string): string | undefined {
+  const match = stdout.match(/"sessionID"\s*:\s*"(ses_[^"]+)"/);
+  return match?.[1];
+}
+
+export function buildOpenCodePartsQuery(sessionId: string): string {
+  return [
+    'select part.message_id as message_id, part.data as data, message.data as message_data',
+    'from part join message on message.id = part.message_id',
+    `where part.session_id = ${sqlString(sessionId)}`,
+    'order by part.time_created',
+  ].join(' ');
+}
+
+function buildHydratedOpenCodeEvent(dbStdout: string): Record<string, unknown> | undefined {
+  let rows: unknown;
+  try {
+    rows = JSON.parse(dbStdout);
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(rows)) return undefined;
+
+  const assistantMessages = new Map<
+    string,
+    { textParts: string[]; tokenStats: Record<string, unknown> }
+  >();
+
+  for (const row of rows) {
+    if (
+      !isRecord(row) ||
+      typeof row.message_id !== 'string' ||
+      typeof row.data !== 'string' ||
+      typeof row.message_data !== 'string'
+    ) {
+      continue;
+    }
+    const messageData = parseJsonRecord(row.message_data);
+    if (messageData?.role !== 'assistant') continue;
+
+    const data = parseJsonRecord(row.data);
+    if (!data) continue;
+
+    const message = assistantMessages.get(row.message_id) ?? {
+      textParts: [],
+      tokenStats: {},
+    };
+    if (data.type === 'text' && typeof data.text === 'string') {
+      message.textParts.push(data.text);
+    }
+    if (data.type === 'step-finish' && isRecord(data.tokens)) {
+      message.tokenStats = data.tokens;
+    }
+    assistantMessages.set(row.message_id, message);
+  }
+
+  const finalMessage = Array.from(assistantMessages.values())
+    .reverse()
+    .find((message) => message.textParts.some((part) => part.trim().length > 0));
+  if (!finalMessage) return undefined;
+
+  const text = finalMessage.textParts.join('').trim();
+  if (!text) return undefined;
+
+  return {
+    type: 'text',
+    text,
+    usage: {
+      input_tokens: numberFrom(finalMessage.tokenStats.input),
+      output_tokens: numberFrom(finalMessage.tokenStats.output),
+      total_tokens: numberFrom(finalMessage.tokenStats.total),
+    },
+  };
+}
+
+function execFilePromise(
+  command: string,
+  args: string[],
+  options: {
+    cwd: string;
+    env: NodeJS.ProcessEnv;
+    timeout: number;
+    maxBuffer: number;
+    windowsHide: boolean;
+  },
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, options, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve({ stdout: bufferToString(stdout), stderr: bufferToString(stderr) });
+    });
+  });
+}
+
+function parseJsonRecord(text: string): Record<string, unknown> | undefined {
+  try {
+    const parsed = JSON.parse(text);
+    return isRecord(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function numberFrom(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined;
+}
+
+function sqlString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+export function buildPtyCommand(command: string, args: string[]): string {
+  return [command, ...args].map(quoteShellArg).join(' ');
+}
+
+function quoteShellArg(value: string): string {
+  if (/^[A-Za-z0-9_/:=.,@%+-]+$/.test(value)) return value;
+  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 function bufferToString(value: string | Buffer): string {
