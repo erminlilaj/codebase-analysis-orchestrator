@@ -1,3 +1,16 @@
+# Windows users: add WINDOWS_HOME=C:\Users\YourName to a .env file next to
+# this file. Your Desktop, Documents, and Downloads will then appear in the
+# file browser's Quick Access sidebar automatically.
+# Linux/Mac users: leave WINDOWS_HOME unset — a harmless empty placeholder is
+# created under ./tmp/win-placeholder and the sidebar entry is hidden.
+x-windows-home: &windows-home
+  type: bind
+  source: ${WINDOWS_HOME:-./tmp/win-placeholder}
+  target: /windows/home
+  read_only: true
+  bind:
+    create_host_path: true
+
 x-app-env: &app-env
   DATABASE_URL: postgresql://postgres:postgres@db:5432/codebase_analysis
   PORT: 3000
@@ -67,6 +80,7 @@ services:
       - opencode_config:/root/.config/opencode
       - opencode_data:/root/.local/share/opencode
       - ./COBOL_TEST:/repositories/COBOL_TEST:ro
+      - *windows-home
     healthcheck:
       test:
         [
@@ -100,6 +114,7 @@ services:
       - opencode_config:/root/.config/opencode
       - opencode_data:/root/.local/share/opencode
       - ./COBOL_TEST:/repositories/COBOL_TEST:ro
+      - *windows-home
 
 volumes:
   pgdata:

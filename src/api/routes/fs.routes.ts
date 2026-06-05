@@ -71,8 +71,9 @@ export async function fsRoutes(app: FastifyInstance): Promise<void> {
 
   app.get('/fs/home', async () => ({ path: os.homedir() }));
 
-  // Returns useful quick-access roots: home, /repositories (Docker bind mount point),
-  // and any drives visible under /mnt (WSL2 exposes Windows drives there).
+  // Returns useful quick-access roots: home directory, /repositories (Docker
+  // bind mount point for repos), and — when WINDOWS_HOME is mounted at
+  // /windows/home — the Windows home plus Desktop/Documents/Downloads.
   app.get('/fs/roots', async () => {
     const roots: FsRoot[] = [{ label: 'Home', path: os.homedir() }];
 
@@ -80,11 +81,17 @@ export async function fsRoutes(app: FastifyInstance): Promise<void> {
       roots.push({ label: 'Repositories', path: '/repositories' });
     }
 
-    if (await dirExists('/mnt')) {
-      const entries = await fs.readdir('/mnt', { withFileTypes: true }).catch(() => []);
-      for (const e of entries) {
-        if (e.isDirectory()) {
-          roots.push({ label: `Drive (${e.name.toUpperCase()}:)`, path: `/mnt/${e.name}` });
+    const winHome = '/windows/home';
+    if (await dirExists(winHome)) {
+      // Only advertise if the directory actually contains something — the
+      // placeholder created when WINDOWS_HOME is unset is empty.
+      const entries = await fs.readdir(winHome).catch(() => [] as string[]);
+      if (entries.length > 0) {
+        roots.push({ label: 'Windows Home', path: winHome });
+        for (const sub of ['Desktop', 'Documents', 'Downloads']) {
+          if (await dirExists(`${winHome}/${sub}`)) {
+            roots.push({ label: sub, path: `${winHome}/${sub}` });
+          }
         }
       }
     }
