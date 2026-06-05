@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import * as api from '../../api';
 import { useFetch } from '../../hooks';
+import { PROVIDER_DEFS } from '../../providerDefs';
 import type { Question } from '../../types';
 import {
   Button,
@@ -15,6 +16,8 @@ import {
   Spinner,
   StatusBadge,
 } from '../../components/ui';
+
+const KNOWN_AGENTS = ['plan', 'build'] as const;
 
 export const RunsTab: React.FC<{ projectId: string }> = ({ projectId }) => {
   const [params, setParams] = useSearchParams();
@@ -90,12 +93,20 @@ const NewRunForm: React.FC<{
   const { data: project } = useFetch(() => api.getProject(projectId), [projectId]);
   const [questions, setQuestions] = useState<Question[] | null>(null);
   const [providerId, setProviderId] = useState('stub');
-  const [model, setModel] = useState('');
+  const [modelSelect, setModelSelect] = useState('');
+  const [modelCustom, setModelCustom] = useState('');
   const [agent, setAgent] = useState('');
   const providers = useFetch(() => api.listProviders(), []);
+  const credentials = useFetch(() => api.listCredentials(), []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Models available based on which provider API keys are saved.
+  const availableModels = useMemo(() => {
+    const savedEnvVars = new Set((credentials.data ?? []).map((c) => c.envVar));
+    return PROVIDER_DEFS.filter((p) => savedEnvVars.has(p.envVar)).flatMap((p) => p.models);
+  }, [credentials.data]);
 
   useEffect(() => {
     if (!project) return;
@@ -105,14 +116,23 @@ const NewRunForm: React.FC<{
     });
   }, [project]);
 
-  // Pre-fill model/agent from the server-configured OpenCode defaults, without
-  // clobbering anything the user has already typed.
+  // Pre-select model/agent from server-configured OpenCode defaults.
   useEffect(() => {
     const details = providers.data?.opencode?.details;
     if (!details) return;
-    if (typeof details.model === 'string') setModel((cur) => cur || (details.model as string));
-    if (typeof details.agent === 'string') setAgent((cur) => cur || (details.agent as string));
-  }, [providers.data]);
+    if (typeof details.model === 'string' && details.model) {
+      setModelSelect((cur) => {
+        if (cur) return cur;
+        return (availableModels as string[]).includes(details.model as string)
+          ? (details.model as string)
+          : '__custom__';
+      });
+      setModelCustom((cur) => cur || (details.model as string));
+    }
+    if (typeof details.agent === 'string' && details.agent) {
+      setAgent((cur) => cur || (details.agent as string));
+    }
+  }, [providers.data, availableModels]);
 
   const isOpenCode = providerId.trim() === 'opencode';
 
@@ -136,7 +156,10 @@ const NewRunForm: React.FC<{
         questionIds: [...selected],
         ...(isOpenCode
           ? {
-              ...(model.trim() ? { model: model.trim() } : {}),
+              ...(() => {
+                const effectiveModel = modelSelect === '__custom__' ? modelCustom.trim() : modelSelect;
+                return effectiveModel ? { model: effectiveModel } : {};
+              })(),
               ...(agent.trim() ? { agent: agent.trim() } : {}),
             }
           : {}),
@@ -181,25 +204,42 @@ const NewRunForm: React.FC<{
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Model</label>
-              <Input
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="(OpenCode default)"
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                e.g. <code className="text-xs">deepseek/deepseek-chat</code>
-              </p>
+              <Select
+                className="w-full"
+                value={modelSelect}
+                onChange={(e) => setModelSelect(e.target.value)}
+              >
+                <option value="">(server default)</option>
+                {availableModels.length === 0 ? (
+                  <option disabled value="">— no API keys configured —</option>
+                ) : (
+                  availableModels.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))
+                )}
+                <option value="__custom__">Custom…</option>
+              </Select>
+              {modelSelect === '__custom__' ? (
+                <Input
+                  className="mt-1"
+                  value={modelCustom}
+                  onChange={(e) => setModelCustom(e.target.value)}
+                  placeholder="e.g. provider/model-name"
+                />
+              ) : null}
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Agent</label>
-              <Input
+              <Select
+                className="w-full"
                 value={agent}
                 onChange={(e) => setAgent(e.target.value)}
-                placeholder="plan"
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                OpenCode agent — <code className="text-xs">plan</code> or <code className="text-xs">build</code>
-              </p>
+              >
+                <option value="">(server default)</option>
+                {KNOWN_AGENTS.map((a) => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </Select>
             </div>
           </div>
         ) : null}
