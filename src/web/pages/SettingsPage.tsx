@@ -200,6 +200,106 @@ const CustomKeyForm: React.FC<{ onSaved: () => void }> = ({ onSaved }) => {
   );
 };
 
+// ── EndpointRow ───────────────────────────────────────────────────────────
+
+type EndpointRowProps = {
+  name: string;
+  envVar: string;
+  defaultUrl: string;
+  credential: ProviderCredential | undefined;
+  onSaved: () => void;
+  onDeleted: () => void;
+};
+
+const EndpointRow: React.FC<EndpointRowProps> = ({ name, envVar, defaultUrl, credential, onSaved, onDeleted }) => {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
+
+  const save = async () => {
+    const trimmed = value.trim();
+    if (!trimmed) { setError('URL is required.'); return; }
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      setError('Must start with http:// or https://');
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.saveCredential(envVar, trimmed);
+      setValue('');
+      setEditing(false);
+      setError(null);
+      onSaved();
+      toast.success(`${name} endpoint saved.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    try {
+      await api.deleteCredential(envVar);
+      onDeleted();
+      toast.success(`${name} endpoint reset to default.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const displayUrl = credential ? credential.valuePreview : defaultUrl;
+  const isOverridden = Boolean(credential);
+
+  return (
+    <li className="px-4 py-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="font-medium text-sm w-28 shrink-0">{name}</span>
+          <code className="font-mono text-xs text-slate-600 truncate max-w-xs">{displayUrl}</code>
+          {!isOverridden && (
+            <span className="text-xs text-slate-400 italic">default</span>
+          )}
+        </div>
+        <div className="flex gap-2 shrink-0">
+          {isOverridden ? (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => { setEditing((e) => !e); setError(null); }}>
+                {editing ? 'Cancel' : 'Change'}
+              </Button>
+              <Button variant="danger" size="sm" onClick={remove}>Reset</Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={() => { setEditing((e) => !e); setError(null); }}>
+              {editing ? 'Cancel' : 'Override'}
+            </Button>
+          )}
+        </div>
+      </div>
+      {editing ? (
+        <div className="flex gap-2 items-end pl-31">
+          <div className="flex-1">
+            <ErrorMessage error={error} />
+            <Input
+              type="text"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void save(); }}
+              placeholder={defaultUrl}
+              autoFocus
+            />
+          </div>
+          <Button onClick={save} disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      ) : null}
+    </li>
+  );
+};
+
 // ── SettingsPage ───────────────────────────────────────────────────────────
 
 export const SettingsPage: React.FC = () => {
@@ -212,7 +312,14 @@ export const SettingsPage: React.FC = () => {
   const credentialProviderDefs = PROVIDER_DEFS.filter(
     (p): p is typeof p & { envVar: string } => Boolean(p.envVar),
   );
-  const knownEnvVars = new Set(credentialProviderDefs.map((p) => p.envVar));
+  const endpointProviderDefs = PROVIDER_DEFS.filter(
+    (p): p is typeof p & { baseUrlVar: string; baseUrlDefault: string } =>
+      Boolean(p.baseUrlVar && p.baseUrlDefault),
+  );
+  const knownEnvVars = new Set([
+    ...credentialProviderDefs.map((p) => p.envVar),
+    ...endpointProviderDefs.map((p) => p.baseUrlVar),
+  ]);
   const customCreds = (creds.data ?? []).filter((c) => !knownEnvVars.has(c.envVar));
 
   return (
@@ -267,6 +374,30 @@ export const SettingsPage: React.FC = () => {
           )}
 
           <CustomKeyForm onSaved={creds.refresh} />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="font-medium text-sm">Provider endpoints</div>
+        </CardHeader>
+        <CardBody>
+          <p className="text-sm text-slate-600 mb-4">
+            Override the API base URL for local providers. Takes effect on the next job — no restart needed.
+          </p>
+          <ul className="border border-slate-200 rounded-md divide-y divide-slate-100">
+            {endpointProviderDefs.map((p) => (
+              <EndpointRow
+                key={p.id}
+                name={p.name}
+                envVar={p.baseUrlVar}
+                defaultUrl={p.baseUrlDefault}
+                credential={credMap.get(p.baseUrlVar)}
+                onSaved={creds.refresh}
+                onDeleted={creds.refresh}
+              />
+            ))}
+          </ul>
         </CardBody>
       </Card>
     </div>

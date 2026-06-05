@@ -11,3 +11,8 @@ export async function loadProviderCredentials(): Promise<Record<string, string>>
   for (const row of rows) env[row.envVar] = row.value;
   return env;
 }
+
+export async function loadProviderSetting(envVar: string): Promise<string | undefined> {
+  const row = await prisma.providerCredential.findUnique({ where: { envVar } });
+  return row?.value ?? undefined;
+}

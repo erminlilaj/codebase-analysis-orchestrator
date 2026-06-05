@@ -3,8 +3,8 @@ import { prisma } from '../../db/prisma';
 
 const ENV_VAR_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-// Never return a stored secret in full — show only a short suffix preview.
 function maskSecret(value: string): string {
+  if (value.startsWith('http://') || value.startsWith('https://')) return value;
   return value.length <= 4 ? '••••' : `••••${value.slice(-4)}`;
 }
 

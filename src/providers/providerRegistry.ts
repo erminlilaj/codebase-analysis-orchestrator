@@ -41,6 +41,7 @@ export async function listProviderHealth(): Promise<Record<KnownProviderId, Prov
 export type ProviderConfigOverrides = {
   model?: string;
   agent?: string;
+  baseUrl?: string;
   credentials?: Record<string, string>;
 };
 
@@ -62,6 +63,7 @@ export function getProvider(
     return new OllamaHttpProvider({
       ...projectConfig.ollama,
       ...(overrides?.model ? { model: overrides.model } : {}),
+      ...(overrides?.baseUrl ? { baseUrl: overrides.baseUrl } : {}),
     });
   }
   return undefined;

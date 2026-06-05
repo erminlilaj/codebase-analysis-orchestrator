@@ -8,7 +8,7 @@ import { recoverStaleJobs } from './recoverStaleJobs';
 import { classifyError, shouldRetry, type FailureKind } from '../core/jobs/retryPolicy';
 import { updateRunStatus } from '../core/runs/updateRunStatus';
 import type { ProviderConfigOverrides } from '../providers/providerRegistry';
-import { loadProviderCredentials } from '../core/settings/providerCredentials';
+import { loadProviderCredentials, loadProviderSetting } from '../core/settings/providerCredentials';
 import {
   eventBus,
   type WorkerLogEvent,
@@ -371,10 +371,16 @@ export class WorkerLoop {
     job: LoadedJob,
   ): Promise<ProviderConfigOverrides | undefined> {
     const settings = readProviderSettings(job.run.metadata);
-    if (job.providerId !== 'opencode') return settings;
-    const credentials = await loadProviderCredentials();
-    if (Object.keys(credentials).length === 0) return settings;
-    return { ...settings, credentials };
+    if (job.providerId === 'opencode') {
+      const credentials = await loadProviderCredentials();
+      if (Object.keys(credentials).length === 0) return settings;
+      return { ...settings, credentials };
+    }
+    if (job.providerId === 'ollama') {
+      const baseUrl = await loadProviderSetting('OLLAMA_BASE_URL');
+      if (baseUrl) return { ...settings, baseUrl };
+    }
+    return settings;
   }
 
   private resolveProvider(

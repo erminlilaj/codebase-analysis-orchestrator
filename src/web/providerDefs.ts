@@ -3,6 +3,8 @@ export type ProviderDef = {
   name: string;
   envVar?: string;
   requiresCredential?: boolean;
+  baseUrlVar?: string;
+  baseUrlDefault?: string;
   models: string[];
 };
 
@@ -55,6 +57,8 @@ export const PROVIDER_DEFS: ProviderDef[] = [
     id: 'ollama',
     name: 'Ollama',
     requiresCredential: false,
+    baseUrlVar: 'OLLAMA_BASE_URL',
+    baseUrlDefault: 'http://host.docker.internal:11434',
     models: [
       'granite4.1:8b',
       'granite-code:8b-instruct',
