@@ -41,6 +41,7 @@ model Project {
   bundles     AnalysisBundle[]
   runs        AnalysisRun[]
   exports     Export[]
+  questions   Question[]
 
   @@index([language])
   @@index([createdAt])
@@ -119,12 +120,15 @@ model Question {
   key       String   @unique  // short slug, e.g. "purpose", "data-structures"
   text      String
   language  String?           // null = universal; "cobol", "java", etc. = language-specific
+  projectId String?            // null = shared question; set = private to one project
   version   Int      @default(1)  // bumped whenever key/text/language changes
   metadata  Json     @default("{}")
   createdAt DateTime @default(now())
 
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   jobs      AnalysisJob[]
 
+  @@index([projectId])
   @@index([language])
   @@index([createdAt])
 }

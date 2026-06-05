@@ -9,3 +9,10 @@ exports
 npm-debug.log*
 Dockerfile
 docker-compose.override.yml
+agents
+bob
+opencode
+docs
+scripts
+handoff.md
+*.md
