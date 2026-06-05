@@ -300,6 +300,98 @@ const EndpointRow: React.FC<EndpointRowProps> = ({ name, envVar, defaultUrl, cre
   );
 };
 
+// ── SettingRow — generic plain-text (or URL) setting stored in the DB ─────
+
+type SettingRowProps = {
+  label: string;
+  envVar: string;
+  placeholder: string;
+  credential: ProviderCredential | undefined;
+  onSaved: () => void;
+  onDeleted: () => void;
+};
+
+const SettingRow: React.FC<SettingRowProps> = ({ label, envVar, placeholder, credential, onSaved, onDeleted }) => {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
+
+  const save = async () => {
+    const trimmed = value.trim();
+    if (!trimmed) { setError('Value is required.'); return; }
+    setSaving(true);
+    try {
+      await api.saveCredential(envVar, trimmed);
+      setValue('');
+      setEditing(false);
+      setError(null);
+      onSaved();
+      toast.success(`${label} saved.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    try {
+      await api.deleteCredential(envVar);
+      onDeleted();
+      toast.success(`${label} cleared.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <li className="px-4 py-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className="font-medium text-sm w-36 shrink-0">{label}</span>
+          {credential ? (
+            <code className="font-mono text-xs text-slate-600 truncate max-w-xs">{credential.valuePreview}</code>
+          ) : (
+            <span className="text-xs text-slate-400 italic">not set</span>
+          )}
+        </div>
+        <div className="flex gap-2 shrink-0">
+          {credential ? (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => { setEditing((e) => !e); setError(null); }}>
+                {editing ? 'Cancel' : 'Change'}
+              </Button>
+              <Button variant="danger" size="sm" onClick={remove}>Clear</Button>
+            </>
+          ) : (
+            <Button size="sm" onClick={() => { setEditing((e) => !e); setError(null); }}>
+              {editing ? 'Cancel' : 'Set'}
+            </Button>
+          )}
+        </div>
+      </div>
+      {editing ? (
+        <div className="flex gap-2 items-end pl-39">
+          <div className="flex-1">
+            <ErrorMessage error={error} />
+            <Input
+              type="text"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void save(); }}
+              placeholder={placeholder}
+              autoFocus
+            />
+          </div>
+          <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
+        </div>
+      ) : null}
+    </li>
+  );
+};
+
 // ── SettingsPage ───────────────────────────────────────────────────────────
 
 export const SettingsPage: React.FC = () => {
@@ -316,9 +408,11 @@ export const SettingsPage: React.FC = () => {
     (p): p is typeof p & { baseUrlVar: string; baseUrlDefault: string } =>
       Boolean(p.baseUrlVar && p.baseUrlDefault),
   );
+  const OPENCODE_SETTING_VARS = ['OLLAMA_HOST', 'OPENCODE_MODEL'] as const;
   const knownEnvVars = new Set([
     ...credentialProviderDefs.map((p) => p.envVar),
     ...endpointProviderDefs.map((p) => p.baseUrlVar),
+    ...OPENCODE_SETTING_VARS,
   ]);
   const customCreds = (creds.data ?? []).filter((c) => !knownEnvVars.has(c.envVar));
 
@@ -397,6 +491,35 @@ export const SettingsPage: React.FC = () => {
                 onDeleted={creds.refresh}
               />
             ))}
+          </ul>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="font-medium text-sm">OpenCode configuration</div>
+        </CardHeader>
+        <CardBody>
+          <p className="text-sm text-slate-600 mb-4">
+            Configures the OpenCode subprocess. Takes effect on the next job — no restart needed.
+          </p>
+          <ul className="border border-slate-200 rounded-md divide-y divide-slate-100">
+            <SettingRow
+              label="Ollama host"
+              envVar="OLLAMA_HOST"
+              placeholder="http://litedncllm002.intra.camera.it:11434"
+              credential={credMap.get('OLLAMA_HOST')}
+              onSaved={creds.refresh}
+              onDeleted={creds.refresh}
+            />
+            <SettingRow
+              label="Default model"
+              envVar="OPENCODE_MODEL"
+              placeholder="ollama/granite-code:8b"
+              credential={credMap.get('OPENCODE_MODEL')}
+              onSaved={creds.refresh}
+              onDeleted={creds.refresh}
+            />
           </ul>
         </CardBody>
       </Card>

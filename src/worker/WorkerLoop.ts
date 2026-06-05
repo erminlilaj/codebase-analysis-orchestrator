@@ -373,8 +373,12 @@ export class WorkerLoop {
     const settings = readProviderSettings(job.run.metadata);
     if (job.providerId === 'opencode') {
       const credentials = await loadProviderCredentials();
-      if (Object.keys(credentials).length === 0) return settings;
-      return { ...settings, credentials };
+      const model = settings?.model ?? credentials['OPENCODE_MODEL'];
+      return {
+        ...settings,
+        ...(model ? { model } : {}),
+        ...(Object.keys(credentials).length > 0 ? { credentials } : {}),
+      };
     }
     if (job.providerId === 'ollama') {
       const baseUrl = await loadProviderSetting('OLLAMA_BASE_URL');

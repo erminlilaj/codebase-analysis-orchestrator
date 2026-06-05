@@ -3,7 +3,10 @@ import { prisma } from '../../db/prisma';
 
 const ENV_VAR_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-function maskSecret(value: string): string {
+const PLAIN_SETTINGS = new Set(['OLLAMA_HOST', 'OPENCODE_MODEL', 'OPENCODE_AGENT', 'OLLAMA_BASE_URL']);
+
+function maskSecret(envVar: string, value: string): string {
+  if (PLAIN_SETTINGS.has(envVar)) return value;
   if (value.startsWith('http://') || value.startsWith('https://')) return value;
   return value.length <= 4 ? '••••' : `••••${value.slice(-4)}`;
 }
@@ -13,7 +16,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     const rows = await prisma.providerCredential.findMany({ orderBy: { envVar: 'asc' } });
     return rows.map((r) => ({
       envVar: r.envVar,
-      valuePreview: maskSecret(r.value),
+      valuePreview: maskSecret(r.envVar, r.value),
       updatedAt: r.updatedAt,
     }));
   });
@@ -43,7 +46,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         create: { envVar, value },
         update: { value },
       });
-      return { envVar: row.envVar, valuePreview: maskSecret(row.value), updatedAt: row.updatedAt };
+      return { envVar: row.envVar, valuePreview: maskSecret(row.envVar, row.value), updatedAt: row.updatedAt };
     },
   );
 
