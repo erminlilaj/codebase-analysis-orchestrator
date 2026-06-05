@@ -92,7 +92,7 @@ const NewRunForm: React.FC<{
 }> = ({ projectId, onCancel, onCreated }) => {
   const { data: project } = useFetch(() => api.getProject(projectId), [projectId]);
   const [questions, setQuestions] = useState<Question[] | null>(null);
-  const [providerId, setProviderId] = useState('stub');
+  const [providerId, setProviderId] = useState('ollama');
   const [modelSelect, setModelSelect] = useState('');
   const [modelCustom, setModelCustom] = useState('');
   const [agent, setAgent] = useState('');
@@ -109,6 +109,8 @@ const NewRunForm: React.FC<{
   // Models available based on selected provider and saved API keys.
   const availableModels = useMemo(() => {
     if (providerId.trim() === 'ollama') {
+      const live = providers.data?.['ollama']?.details?.models;
+      if (Array.isArray(live) && live.length > 0) return live as string[];
       return PROVIDER_DEFS.find((p) => p.id === 'ollama')?.models ?? [];
     }
 
