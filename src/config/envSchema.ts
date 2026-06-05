@@ -28,6 +28,13 @@ export const envSchema = z.object({
   OPENCODE_MAX_BUFFER_MB: z.coerce.number().int().positive().default(20),
   OPENCODE_MAX_INLINE_BYTES: z.coerce.number().int().positive().default(51200),
 
+  // Native Ollama HTTP provider — calls the local Ollama API directly
+  OLLAMA_PROVIDER_ENABLED: booleanFromEnv.default(true),
+  OLLAMA_BASE_URL: z.string().default('http://127.0.0.1:11434'),
+  OLLAMA_MODEL: z.string().optional(),
+  OLLAMA_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
+  OLLAMA_MAX_INLINE_BYTES: z.coerce.number().int().positive().default(200000),
+
   // Filesystem
   WORKSPACE_ROOT: z.string().default('tmp/workspaces'),
   EXPORT_ROOT: z.string().default('exports'),

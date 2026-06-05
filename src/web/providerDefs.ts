@@ -1,7 +1,8 @@
 export type ProviderDef = {
   id: string;
   name: string;
-  envVar: string;
+  envVar?: string;
+  requiresCredential?: boolean;
   models: string[];
 };
 
@@ -49,5 +50,16 @@ export const PROVIDER_DEFS: ProviderDef[] = [
     name: 'Groq',
     envVar: 'GROQ_API_KEY',
     models: ['groq/llama-3.3-70b-versatile', 'groq/mixtral-8x7b-32768'],
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama',
+    requiresCredential: false,
+    models: [
+      'granite4.1:8b',
+      'granite-code:8b-instruct',
+      'granite-code:8b',
+      'Almawave/Velvet:latest',
+    ],
   },
 ];

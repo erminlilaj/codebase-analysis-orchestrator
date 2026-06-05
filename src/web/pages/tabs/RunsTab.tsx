@@ -102,11 +102,22 @@ const NewRunForm: React.FC<{
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Models available based on which provider API keys are saved.
+  const isOpenCode = providerId.trim() === 'opencode';
+  const isOllama = providerId.trim() === 'ollama';
+  const hasModelPicker = isOpenCode || isOllama;
+
+  // Models available based on selected provider and saved API keys.
   const availableModels = useMemo(() => {
+    if (providerId.trim() === 'ollama') {
+      return PROVIDER_DEFS.find((p) => p.id === 'ollama')?.models ?? [];
+    }
+
     const savedEnvVars = new Set((credentials.data ?? []).map((c) => c.envVar));
-    return PROVIDER_DEFS.filter((p) => savedEnvVars.has(p.envVar)).flatMap((p) => p.models);
-  }, [credentials.data]);
+    return PROVIDER_DEFS
+      .filter((p) => p.id !== 'ollama')
+      .filter((p) => p.requiresCredential === false || (p.envVar && savedEnvVars.has(p.envVar)))
+      .flatMap((p) => p.models);
+  }, [credentials.data, providerId]);
 
   useEffect(() => {
     if (!project) return;
@@ -116,9 +127,15 @@ const NewRunForm: React.FC<{
     });
   }, [project]);
 
-  // Pre-select model/agent from server-configured OpenCode defaults.
   useEffect(() => {
-    const details = providers.data?.opencode?.details;
+    setModelSelect('');
+    setModelCustom('');
+    setAgent('');
+  }, [providerId]);
+
+  // Pre-select model/agent from server-configured provider defaults.
+  useEffect(() => {
+    const details = providers.data?.[providerId]?.details;
     if (!details) return;
     if (typeof details.model === 'string' && details.model) {
       setModelSelect((cur) => {
@@ -129,12 +146,10 @@ const NewRunForm: React.FC<{
       });
       setModelCustom((cur) => cur || (details.model as string));
     }
-    if (typeof details.agent === 'string' && details.agent) {
+    if (isOpenCode && typeof details.agent === 'string' && details.agent) {
       setAgent((cur) => cur || (details.agent as string));
     }
-  }, [providers.data, availableModels]);
-
-  const isOpenCode = providerId.trim() === 'opencode';
+  }, [providers.data, availableModels, providerId, isOpenCode]);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -154,13 +169,13 @@ const NewRunForm: React.FC<{
       await api.createRun(projectId, {
         providerId: providerId.trim(),
         questionIds: [...selected],
-        ...(isOpenCode
+        ...(hasModelPicker
           ? {
               ...(() => {
                 const effectiveModel = modelSelect === '__custom__' ? modelCustom.trim() : modelSelect;
                 return effectiveModel ? { model: effectiveModel } : {};
               })(),
-              ...(agent.trim() ? { agent: agent.trim() } : {}),
+              ...(isOpenCode && agent.trim() ? { agent: agent.trim() } : {}),
             }
           : {}),
       });
@@ -200,8 +215,8 @@ const NewRunForm: React.FC<{
           ) : null}
         </div>
 
-        {isOpenCode ? (
-          <div className="grid grid-cols-2 gap-3">
+        {hasModelPicker ? (
+          <div className={isOpenCode ? 'grid grid-cols-2 gap-3' : 'grid grid-cols-1 gap-3'}>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Model</label>
               <Select
@@ -224,11 +239,12 @@ const NewRunForm: React.FC<{
                   className="mt-1"
                   value={modelCustom}
                   onChange={(e) => setModelCustom(e.target.value)}
-                  placeholder="e.g. provider/model-name"
+                  placeholder={isOllama ? 'e.g. granite4.1:8b' : 'e.g. provider/model-name'}
                 />
               ) : null}
             </div>
-            <div>
+            {isOpenCode ? (
+              <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Agent</label>
               <Select
                 className="w-full"
@@ -240,7 +256,8 @@ const NewRunForm: React.FC<{
                   <option key={a} value={a}>{a}</option>
                 ))}
               </Select>
-            </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
         <div>

@@ -6,8 +6,10 @@ import { checkBobProviderHealth } from './bob/BobProviderHealth';
 import { BobShellProvider } from './bob/BobShellProvider';
 import { checkOpenCodeProviderHealth } from './opencode/OpenCodeProviderHealth';
 import { OpenCodeShellProvider } from './opencode/OpenCodeShellProvider';
+import { checkOllamaProviderHealth } from './ollama/OllamaProviderHealth';
+import { OllamaHttpProvider } from './ollama/OllamaHttpProvider';
 
-export const knownProviderIds = ['stub', 'bob', 'opencode'] as const;
+export const knownProviderIds = ['stub', 'bob', 'opencode', 'ollama'] as const;
 export type KnownProviderId = (typeof knownProviderIds)[number];
 
 export function isKnownProviderId(providerId: string): providerId is KnownProviderId {
@@ -18,6 +20,7 @@ export async function getProviderHealth(providerId: string): Promise<ProviderHea
   if (providerId === 'stub') return new StubProvider().health();
   if (providerId === 'bob') return checkBobProviderHealth(projectConfig.bob);
   if (providerId === 'opencode') return checkOpenCodeProviderHealth(projectConfig.opencode);
+  if (providerId === 'ollama') return checkOllamaProviderHealth(projectConfig.ollama);
   return undefined;
 }
 
@@ -53,6 +56,12 @@ export function getProvider(
       ...(overrides?.model ? { model: overrides.model } : {}),
       ...(overrides?.agent ? { agent: overrides.agent } : {}),
       ...(overrides?.credentials ? { extraEnv: overrides.credentials } : {}),
+    });
+  }
+  if (providerId === 'ollama') {
+    return new OllamaHttpProvider({
+      ...projectConfig.ollama,
+      ...(overrides?.model ? { model: overrides.model } : {}),
     });
   }
   return undefined;

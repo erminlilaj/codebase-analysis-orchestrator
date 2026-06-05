@@ -35,4 +35,11 @@ export const projectConfig = {
     maxBufferMb: env.OPENCODE_MAX_BUFFER_MB,
     maxInlineBytes: env.OPENCODE_MAX_INLINE_BYTES,
   },
+  ollama: {
+    baseUrl: env.OLLAMA_BASE_URL,
+    model: env.OLLAMA_MODEL,
+    enabled: env.OLLAMA_PROVIDER_ENABLED,
+    timeoutMs: env.OLLAMA_TIMEOUT_MS,
+    maxInlineBytes: env.OLLAMA_MAX_INLINE_BYTES,
+  },
 } as const;

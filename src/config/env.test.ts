@@ -23,6 +23,10 @@ describe('envSchema', () => {
     expect(result.data.OPENCODE_TIMEOUT_MS).toBe(180000);
     expect(result.data.OPENCODE_MAX_BUFFER_MB).toBe(20);
     expect(result.data.OPENCODE_MAX_INLINE_BYTES).toBe(51200);
+    expect(result.data.OLLAMA_PROVIDER_ENABLED).toBe(true);
+    expect(result.data.OLLAMA_BASE_URL).toBe('http://127.0.0.1:11434');
+    expect(result.data.OLLAMA_TIMEOUT_MS).toBe(180000);
+    expect(result.data.OLLAMA_MAX_INLINE_BYTES).toBe(200000);
     expect(result.data.JOB_MAX_ATTEMPTS).toBe(3);
     expect(result.data.WORKER_CONCURRENCY).toBe(4);
     expect(result.data.WORKER_POLL_INTERVAL_MS).toBe(2000);
@@ -41,6 +45,9 @@ describe('envSchema', () => {
       OPENCODE_TIMEOUT_MS: '120000',
       OPENCODE_MAX_BUFFER_MB: '30',
       OPENCODE_MAX_INLINE_BYTES: '4096',
+      OLLAMA_PROVIDER_ENABLED: 'true',
+      OLLAMA_TIMEOUT_MS: '150000',
+      OLLAMA_MAX_INLINE_BYTES: '8192',
       JOB_MAX_ATTEMPTS: '5',
       WORKER_CONCURRENCY: '8',
     });
@@ -55,6 +62,9 @@ describe('envSchema', () => {
     expect(result.data.OPENCODE_TIMEOUT_MS).toBe(120000);
     expect(result.data.OPENCODE_MAX_BUFFER_MB).toBe(30);
     expect(result.data.OPENCODE_MAX_INLINE_BYTES).toBe(4096);
+    expect(result.data.OLLAMA_PROVIDER_ENABLED).toBe(true);
+    expect(result.data.OLLAMA_TIMEOUT_MS).toBe(150000);
+    expect(result.data.OLLAMA_MAX_INLINE_BYTES).toBe(8192);
     expect(result.data.JOB_MAX_ATTEMPTS).toBe(5);
     expect(result.data.WORKER_CONCURRENCY).toBe(8);
   });
@@ -64,11 +74,13 @@ describe('envSchema', () => {
       DATABASE_URL: 'postgresql://localhost/test',
       BOB_PROVIDER_ENABLED: 'false',
       OPENCODE_PROVIDER_ENABLED: 'off',
+      OLLAMA_PROVIDER_ENABLED: 'no',
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.BOB_PROVIDER_ENABLED).toBe(false);
     expect(result.data.OPENCODE_PROVIDER_ENABLED).toBe(false);
+    expect(result.data.OLLAMA_PROVIDER_ENABLED).toBe(false);
   });
 
   it('rejects non-positive numbers', () => {
@@ -85,5 +97,6 @@ describe('envSchema', () => {
     if (!result.success) return;
     expect(result.data.BOBSHELL_API_KEY).toBeUndefined();
     expect(result.data.OPENCODE_MODEL).toBeUndefined();
+    expect(result.data.OLLAMA_MODEL).toBeUndefined();
   });
 });

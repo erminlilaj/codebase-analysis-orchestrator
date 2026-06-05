@@ -209,7 +209,10 @@ export const SettingsPage: React.FC = () => {
     (creds.data ?? []).map((c) => [c.envVar, c]),
   );
 
-  const knownEnvVars = new Set(PROVIDER_DEFS.map((p) => p.envVar));
+  const credentialProviderDefs = PROVIDER_DEFS.filter(
+    (p): p is typeof p & { envVar: string } => Boolean(p.envVar),
+  );
+  const knownEnvVars = new Set(credentialProviderDefs.map((p) => p.envVar));
   const customCreds = (creds.data ?? []).filter((c) => !knownEnvVars.has(c.envVar));
 
   return (
@@ -223,14 +226,14 @@ export const SettingsPage: React.FC = () => {
         <CardBody>
           <p className="text-sm text-slate-600 mb-4">
             Keys are stored in the database and injected into the OpenCode subprocess at
-            run time. Only providers with a key set will appear in the model picker.
+            run time. API-backed models appear after their key is set; local models appear automatically.
           </p>
 
           {creds.loading && !creds.data ? (
             <div className="flex items-center gap-2 text-slate-500"><Spinner /> Loading…</div>
           ) : (
             <ul className="border border-slate-200 rounded-md divide-y divide-slate-100">
-              {PROVIDER_DEFS.map((p) => (
+              {credentialProviderDefs.map((p) => (
                 <ProviderRow
                   key={p.id}
                   name={p.name}

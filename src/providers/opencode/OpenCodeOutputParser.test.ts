@@ -59,6 +59,120 @@ describe('parseOpenCodeOutput', () => {
     });
   });
 
+  it('parses nested OpenCode message.part.updated text events', () => {
+    const stdout = [
+      JSON.stringify({
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            type: 'text',
+            text: '{"answer":"Nested event parsed.","confidence":"high","evidence":[],"unresolved":[],"missingContext":[]}',
+          },
+        },
+      }),
+      JSON.stringify({
+        type: 'message.part.updated',
+        properties: {
+          part: {
+            type: 'step-finish',
+            tokens: { input: 10, output: 5, total: 15 },
+          },
+        },
+      }),
+    ].join('\n');
+
+    const result = parseOpenCodeOutput({ stdout, exitCode: 0 });
+
+    expect(result.metadata).toMatchObject({
+      parseStatus: 'parsed',
+      parseSource: 'ndjson-message',
+    });
+    expect(result.parsedAnswer).toMatchObject({
+      answer: 'Nested event parsed.',
+      confidence: 'high',
+    });
+  });
+
+  it('does not treat user message content as assistant output', () => {
+    const stdout = [
+      JSON.stringify({
+        type: 'message.updated',
+        message: {
+          role: 'user',
+          content: '{"answer":"This is the prompt, not the answer."}',
+        },
+      }),
+      JSON.stringify({
+        type: 'message.updated',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'text',
+              text: '{"answer":"Assistant event parsed.","confidence":"medium","evidence":[],"unresolved":[],"missingContext":[]}',
+            },
+          ],
+        },
+      }),
+    ].join('\n');
+
+    const result = parseOpenCodeOutput({ stdout, exitCode: 0 });
+
+    expect(result.metadata.parseStatus).toBe('parsed');
+    expect(result.parsedAnswer).toMatchObject({
+      answer: 'Assistant event parsed.',
+      confidence: 'medium',
+    });
+  });
+
+  it('marks a single OpenCode error event as provider_error', () => {
+    const stdout = JSON.stringify({
+      type: 'error',
+      error: {
+        data: { message: 'Unexpected server error. Check server logs for details.' },
+        name: 'UnknownError',
+      },
+      sessionID: 'ses_168753f8dffedByEjzfLeb5lfv',
+      timestamp: 1780658913590,
+    });
+
+    const result = parseOpenCodeOutput({ stdout, exitCode: 0 });
+
+    expect(result.parsedAnswer).toEqual({});
+    expect(result.metadata).toMatchObject({
+      parseStatus: 'parse_error',
+      parseSource: 'strict-json',
+      failureKind: 'provider_error',
+      error: 'Unexpected server error. Check server logs for details.',
+    });
+  });
+
+  it('marks OpenCode error events inside NDJSON as provider_error', () => {
+    const stdout = [
+      JSON.stringify({
+        type: 'session.created',
+        sessionID: 'ses_168753f8dffedByEjzfLeb5lfv',
+      }),
+      JSON.stringify({
+        type: 'error',
+        error: {
+          data: { message: 'Unexpected server error. Check server logs for details.' },
+          name: 'UnknownError',
+        },
+      }),
+    ].join('\n');
+
+    const result = parseOpenCodeOutput({ stdout, exitCode: 0 });
+
+    expect(result.parsedAnswer).toEqual({});
+    expect(result.metadata).toMatchObject({
+      parseStatus: 'parse_error',
+      parseSource: 'none',
+      failureKind: 'provider_error',
+      error: 'Unexpected server error. Check server logs for details.',
+    });
+  });
+
   it('marks malformed JSON as parse_error while preserving raw output', async () => {
     const stdout = await fixture('malformed.stdout');
     const result = parseOpenCodeOutput({ stdout, exitCode: 0 });

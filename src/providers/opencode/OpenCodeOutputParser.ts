@@ -99,7 +99,7 @@ export function parseOpenCodeOutput(
         ...ndjson.tokenMetadata,
         parseStatus: ndjson.ok ? 'parsed' : 'parse_error',
         parseSource: ndjson.ok ? 'ndjson-message' : ndjson.parseSource,
-        failureKind: ndjson.ok ? undefined : 'parse_error',
+        failureKind: ndjson.ok ? undefined : ndjson.failureKind ?? 'parse_error',
         error: ndjson.ok ? undefined : ndjson.error,
       },
     };
@@ -107,6 +107,17 @@ export function parseOpenCodeOutput(
 
   const parsed = parseJsonAnswer(stdout);
   if (parsed.ok) {
+    const providerError = extractOpenCodeError(parsed.value);
+    if (providerError) {
+      return failureResult(rawOutput, {
+        ...baseMetadata,
+        parseStatus: 'parse_error',
+        parseSource: parsed.source,
+        failureKind: 'provider_error',
+        error: providerError,
+      });
+    }
+
     return {
       rawOutput,
       parsedAnswer: parsed.value,
@@ -184,6 +195,7 @@ function parseNdjson(
       parsedAnswer: unknown;
       parseSource: OpenCodeOutputParseSource;
       tokenMetadata: Partial<OpenCodeOutputParseMetadata>;
+      failureKind?: OpenCodeOutputFailureKind;
       error?: string;
     }
   | undefined {
@@ -205,9 +217,11 @@ function parseNdjson(
 
   const textParts: string[] = [];
   let tokenMetadata: Partial<OpenCodeOutputParseMetadata> = {};
+  let providerError: string | undefined;
 
   for (const event of events) {
     if (!isRecord(event)) continue;
+    providerError = providerError ?? extractOpenCodeError(event);
     const text = extractEventText(event);
     if (text) textParts.push(text);
     tokenMetadata = {
@@ -216,6 +230,17 @@ function parseNdjson(
       ...parseTokenStats(recordFrom(event.info)),
       ...parseTokenStats(recordFrom(event.usage)),
       ...parseTokenStats(recordFrom(event.cost)),
+    };
+  }
+
+  if (providerError) {
+    return {
+      ok: false,
+      parsedAnswer: {},
+      parseSource: 'none',
+      tokenMetadata,
+      failureKind: 'provider_error',
+      error: providerError,
     };
   }
 
@@ -250,22 +275,85 @@ function parseNdjson(
 }
 
 function extractEventText(event: Record<string, unknown>): string | undefined {
-  const direct = stringFrom(event.text) ?? stringFrom(event.message) ?? stringFrom(event.content);
+  const direct = extractTextFromRecord(event);
   if (direct) return direct;
 
-  const part = recordFrom(event.part);
-  const partText = stringFrom(part?.text) ?? stringFrom(part?.content);
-  if (partText) return partText;
+  const propertiesText = extractTextFromRecord(recordFrom(event.properties));
+  if (propertiesText) return propertiesText;
 
-  const delta = recordFrom(event.delta);
-  const deltaText = stringFrom(delta?.text) ?? stringFrom(delta?.content);
-  if (deltaText) return deltaText;
+  const dataText = extractTextFromRecord(recordFrom(event.data));
+  if (dataText) return dataText;
 
-  const info = recordFrom(event.info);
-  const output = info ? stringFrom(info.output) ?? stringFrom(info.message) : undefined;
-  if (output) return output;
+  const messageText = extractTextFromRecord(recordFrom(event.message));
+  if (messageText) return messageText;
 
   return undefined;
+}
+
+function extractTextFromRecord(record: Record<string, unknown> | undefined): string | undefined {
+  if (!record) return undefined;
+
+  const role = stringFrom(record.role);
+  if (role && role !== 'assistant') return undefined;
+
+  const direct =
+    stringFrom(record.text) ??
+    stringFrom(record.message) ??
+    stringFrom(record.content) ??
+    stringFrom(record.output);
+  if (direct) return direct;
+
+  const part = recordFrom(record.part);
+  const partText = extractTextPart(part);
+  if (partText) return partText;
+
+  const delta = recordFrom(record.delta);
+  const deltaText = extractTextPart(delta);
+  if (deltaText) return deltaText;
+
+  const info = recordFrom(record.info);
+  const infoText = extractTextFromRecord(info);
+  if (infoText) return infoText;
+
+  const partsText = extractTextParts(record.parts);
+  if (partsText) return partsText;
+
+  const contentText = extractTextParts(record.content);
+  if (contentText) return contentText;
+
+  return undefined;
+}
+
+function extractTextPart(part: Record<string, unknown> | undefined): string | undefined {
+  if (!part) return undefined;
+  const type = stringFrom(part.type);
+  if (type && type !== 'text' && type !== 'content') return undefined;
+  return stringFrom(part.text) ?? stringFrom(part.content);
+}
+
+function extractTextParts(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const parts = value
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      return extractTextPart(recordFrom(item));
+    })
+    .filter((text): text is string => Boolean(text));
+  return parts.length > 0 ? parts.join('') : undefined;
+}
+
+function extractOpenCodeError(value: unknown): string | undefined {
+  const record = recordFrom(value);
+  if (!record || stringFrom(record.type) !== 'error') return undefined;
+
+  const error = recordFrom(record.error);
+  const data = recordFrom(error?.data);
+  return (
+    stringFrom(data?.message) ??
+    stringFrom(error?.message) ??
+    stringFrom(record.message) ??
+    'OpenCode returned an error event'
+  );
 }
 
 function parseTokenStats(
