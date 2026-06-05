@@ -528,13 +528,14 @@ All config is read once at startup from environment variables, validated by
 | `BOB_TIMEOUT_MS` | `180000` | Bob Shell process timeout |
 | `BOB_MAX_BUFFER_MB` | `20` | Maximum Bob Shell stdout/stderr buffer size |
 | `BOB_MAX_INLINE_BYTES` | `51200` | Maximum source bytes allowed in inline prompt mode |
-| `OPENCODE_PROVIDER_ENABLED` | `true` | Enables OpenCode CLI provider readiness and execution paths |
+| `OPENCODE_PROVIDER_ENABLED` | `true` app default, `false` in Docker/example setup | Enables OpenCode CLI provider readiness and execution paths |
 | `OPENCODE_COMMAND` | `opencode` | CLI binary name/path for OpenCode; code falls back to `~/.opencode/bin/opencode` when present |
 | `OPENCODE_MODEL` | _empty_ | Optional model in `provider/model` format; empty uses OpenCode's saved/default model |
 | `OPENCODE_AGENT` | `plan` | OpenCode agent used for batch analysis |
 | `OPENCODE_TIMEOUT_MS` | `180000` | OpenCode process timeout |
 | `OPENCODE_MAX_BUFFER_MB` | `20` | Maximum OpenCode stdout/stderr buffer size |
 | `OPENCODE_MAX_INLINE_BYTES` | `51200` | Maximum source bytes allowed in inline prompt mode |
+| `INSTALL_OPENCODE` | `true` | Docker build arg that installs the official OpenCode CLI package into the app image |
 
 Copy `.env.example` to `.env` to get started.
 
@@ -542,9 +543,154 @@ Copy `.env.example` to `.env` to get started.
 
 ## Quick start
 
+### Docker pipeline
+
+This is the normal way to run the system. It starts the full local stack:
+Postgres, API, built web UI, Prisma migrations/seeding, and the worker.
+Ollama runs separately on the host machine.
+
+First install/start Ollama and pull the model:
+
 ```sh
-# Postgres (port 5432, user/pass: postgres/postgres)
-docker compose up -d
+ollama pull granite4.1:8b
+```
+
+On Linux, the host Ollama service must listen beyond `127.0.0.1` so Docker
+containers can reach it:
+
+```sh
+OLLAMA_HOST=0.0.0.0:11434 ollama serve
+```
+
+On Windows with Docker Desktop, keep Ollama running normally and use PowerShell:
+
+```powershell
+ollama pull granite4.1:8b
+docker compose up --build
+```
+
+```sh
+docker compose up --build
+```
+
+Open <http://127.0.0.1:3000>. In Docker, server-side project paths must be
+container paths. The included COBOL fixture is mounted at:
+
+```text
+/repositories/COBOL_TEST
+```
+
+Create a run with:
+
+```text
+Provider: ollama
+Model: granite4.1:8b
+```
+
+Useful Docker commands:
+
+```sh
+docker compose logs -f api worker
+docker compose down
+docker compose down -v   # also removes Postgres/app volumes
+```
+
+Override the default Ollama model with:
+
+```sh
+OLLAMA_MODEL=granite-code:8b docker compose up --build
+```
+
+PowerShell:
+
+```powershell
+$env:OLLAMA_MODEL="granite-code:8b"; docker compose up --build
+```
+
+If port 3000 is already in use on the host:
+
+```sh
+APP_PORT=3001 docker compose up --build
+```
+
+PowerShell:
+
+```powershell
+$env:APP_PORT="3001"; docker compose up --build
+```
+
+Then open <http://127.0.0.1:3001>.
+
+By default Docker connects to the host Ollama at
+`http://host.docker.internal:11434`. If needed, override that with:
+
+```sh
+DOCKER_OLLAMA_BASE_URL=http://host.docker.internal:11434 docker compose up --build
+```
+
+### OpenCode Setup
+
+OpenCode is optional. Use either local OpenCode or the Docker-installed
+OpenCode CLI.
+
+For local Windows/PowerShell setup:
+
+```powershell
+npm install -g opencode-ai
+opencode --version
+```
+
+Then configure OpenCode auth/model normally:
+
+```powershell
+opencode
+opencode models
+```
+
+For Docker, the image installs `opencode-ai` by default during `docker compose
+up --build`. Put OpenCode/provider settings in `.env`:
+
+```env
+OPENCODE_PROVIDER_ENABLED=true
+OPENCODE_COMMAND=opencode
+OPENCODE_MODEL=anthropic/claude-sonnet-4-20250514
+OPENCODE_AGENT=plan
+ANTHROPIC_API_KEY=your-key-here
+```
+
+Then rebuild/start:
+
+```powershell
+docker compose up --build
+```
+
+To verify the CLI inside the container:
+
+```powershell
+docker compose run --rm api opencode --version
+docker compose run --rm api opencode models
+```
+
+If you prefer interactive OpenCode login/config instead of API keys in `.env`,
+run it once inside the container:
+
+```powershell
+docker compose run --rm api opencode
+```
+
+OpenCode config and data are persisted in Docker volumes
+`opencode_config` and `opencode_data`, so container rebuilds keep the login and
+model configuration. To skip installing OpenCode into the Docker image:
+
+```powershell
+$env:INSTALL_OPENCODE="false"; docker compose build
+```
+
+### Local development
+
+```sh
+# Postgres only (port 5432, user/pass: postgres/postgres)
+docker compose up -d db
 
 # Install deps + generate Prisma client
 npm install
@@ -648,7 +794,7 @@ Both suites are skipped by default to keep `npm test` fast and self-contained.
 To run them:
 
 ```sh
-docker compose up -d           # Postgres must be running
+docker compose up -d db        # Postgres must be running
 npm run db:deploy              # Apply migrations
 
 RUN_LIVE_DB_TESTS=1 npm test   # Enables both live DB suites (257 total)
@@ -712,7 +858,7 @@ Each record carries: `projectId`, `runId`, `runStatus`, `jobId`, `jobStatus`,
 #### Running it
 
 ```sh
-docker compose up -d    # Postgres must be running
+docker compose up -d db # Postgres must be running
 npm run db:deploy       # Apply migrations
 npm run db:seed         # Seed the 3 COBOL questions
 

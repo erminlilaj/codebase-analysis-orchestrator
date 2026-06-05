@@ -10,6 +10,8 @@
     "dev": "tsx watch src/api/server.ts",
     "dev:worker": "tsx watch src/worker/worker.ts",
     "build": "tsc",
+    "build:server": "tsc -p tsconfig.build.json",
+    "build:docker": "npm run db:generate && npm run build:server && npm run web:build",
     "start": "node dist/api/server.js",
     "start:worker": "node dist/worker/worker.js",
     "test": "vitest run",

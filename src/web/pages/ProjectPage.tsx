@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import * as api from '../api';
 import { useFetch } from '../hooks';
-import { Button, Spinner, useToast } from '../components/ui';
+import { Button, ErrorMessage, Spinner, useToast } from '../components/ui';
 import { OverviewTab } from './tabs/OverviewTab';
 import { FilesTab } from './tabs/FilesTab';
 import { BundlesTab } from './tabs/BundlesTab';

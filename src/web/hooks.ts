@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as api from './api';
-import type { AnalysisRun, AnalysisJob, AnalysisAnswer } from './types';
+import type { AnalysisRun, AnalysisJob, AnalysisAnswer, JobStatus } from './types';
 
 export type LogEntry = {
   message: string;
@@ -100,7 +100,7 @@ type RunDataState = {
   refresh: () => void;
 };
 
-type SseJobUpdate = { type: 'job_update'; job: { id: string; status: string; attempts: number; lastError: string | null; failureKind: string | null } };
+type SseJobUpdate = { type: 'job_update'; job: { id: string; status: JobStatus; attempts: number; lastError: string | null; failureKind: string | null } };
 type SseAnswerNew = { type: 'answer_new'; answer: AnalysisAnswer };
 type SseRunUpdate = { type: 'run_update'; status: string; finishedAt: string | null };
 type SseLogEvent = { type: 'log' } & LogEntry;

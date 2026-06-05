@@ -1,3 +1,26 @@
+x-app-env: &app-env
+  DATABASE_URL: postgresql://postgres:postgres@db:5432/codebase_analysis
+  PORT: 3000
+  BOB_PROVIDER_ENABLED: ${BOB_PROVIDER_ENABLED:-false}
+  OPENCODE_PROVIDER_ENABLED: ${OPENCODE_PROVIDER_ENABLED:-false}
+  OPENCODE_COMMAND: ${OPENCODE_COMMAND:-opencode}
+  OPENCODE_MODEL: ${OPENCODE_MODEL:-}
+  OPENCODE_AGENT: ${OPENCODE_AGENT:-plan}
+  OPENCODE_TIMEOUT_MS: ${OPENCODE_TIMEOUT_MS:-180000}
+  OPENCODE_MAX_BUFFER_MB: ${OPENCODE_MAX_BUFFER_MB:-20}
+  OPENCODE_MAX_INLINE_BYTES: ${OPENCODE_MAX_INLINE_BYTES:-51200}
+  OLLAMA_PROVIDER_ENABLED: "true"
+  OLLAMA_BASE_URL: ${DOCKER_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+  OLLAMA_MODEL: ${OLLAMA_MODEL:-granite4.1:8b}
+  OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-180000}
+  OLLAMA_MAX_INLINE_BYTES: ${OLLAMA_MAX_INLINE_BYTES:-200000}
+  WORKSPACE_ROOT: /app/tmp/workspaces
+  EXPORT_ROOT: /app/exports
+  JOB_MAX_ATTEMPTS: ${JOB_MAX_ATTEMPTS:-3}
+  JOB_STALE_TIMEOUT_SECONDS: ${JOB_STALE_TIMEOUT_SECONDS:-300}
+  WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-2000}
+  WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+
 services:
   db:
     image: postgres:16-alpine
@@ -15,7 +38,74 @@ services:
       test: ["CMD-SHELL", "pg_isready -U postgres -d codebase_analysis"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+
+  api:
+    build:
+      context: .
+      args:
+        INSTALL_OPENCODE: ${INSTALL_OPENCODE:-true}
+    image: codebase-analysis-orchestrator:local
+    container_name: codebase_analysis_api
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *app-env
+    command: ["api"]
+    depends_on:
+      db:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - app_workspaces:/app/tmp/workspaces
+      - app_exports:/app/exports
+      - opencode_config:/root/.config/opencode
+      - opencode_data:/root/.local/share/opencode
+      - ./COBOL_TEST:/repositories/COBOL_TEST:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/providers').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  worker:
+    image: codebase-analysis-orchestrator:local
+    container_name: codebase_analysis_worker
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      <<: *app-env
+    command: ["worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - app_workspaces:/app/tmp/workspaces
+      - app_exports:/app/exports
+      - opencode_config:/root/.config/opencode
+      - opencode_data:/root/.local/share/opencode
+      - ./COBOL_TEST:/repositories/COBOL_TEST:ro
 
 volumes:
   pgdata:
+  app_workspaces:
+  app_exports:
+  opencode_config:
+  opencode_data:
