@@ -3,6 +3,10 @@ import os from 'os';
 import path from 'path';
 import type { FastifyInstance } from 'fastify';
 
+async function dirExists(p: string): Promise<boolean> {
+  try { return (await fs.stat(p)).isDirectory(); } catch { return false; }
+}
+
 export type FsEntry = {
   name: string;
   path: string;
@@ -16,11 +20,15 @@ export type FsListResponse = {
   entries: FsEntry[];
 };
 
+export type FsRoot = { label: string; path: string };
+
 // Local-only, single-user. Lists directory contents on the server filesystem
 // so the web UI can drive a path picker for project.repoPath.
 export async function fsRoutes(app: FastifyInstance): Promise<void> {
-  app.get<{ Querystring: { path?: string } }>('/fs/list', async (req, reply) => {
+  app.get<{ Querystring: { path?: string; showHidden?: string } }>('/fs/list', async (req, reply) => {
     const target = req.query.path?.trim() || os.homedir();
+    const showHidden = req.query.showHidden === 'true';
+
     let abs: string;
     try {
       abs = path.resolve(target);
@@ -40,7 +48,7 @@ export async function fsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const entries: FsEntry[] = dirents
-      .filter((d) => !d.name.startsWith('.')) // hide dotfiles by default
+      .filter((d) => showHidden || !d.name.startsWith('.'))
       .map((d) => ({
         name: d.name,
         path: path.join(abs, d.name),
@@ -62,4 +70,25 @@ export async function fsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.get('/fs/home', async () => ({ path: os.homedir() }));
+
+  // Returns useful quick-access roots: home, /repositories (Docker bind mount point),
+  // and any drives visible under /mnt (WSL2 exposes Windows drives there).
+  app.get('/fs/roots', async () => {
+    const roots: FsRoot[] = [{ label: 'Home', path: os.homedir() }];
+
+    if (await dirExists('/repositories')) {
+      roots.push({ label: 'Repositories', path: '/repositories' });
+    }
+
+    if (await dirExists('/mnt')) {
+      const entries = await fs.readdir('/mnt', { withFileTypes: true }).catch(() => []);
+      for (const e of entries) {
+        if (e.isDirectory()) {
+          roots.push({ label: `Drive (${e.name.toUpperCase()}:)`, path: `/mnt/${e.name}` });
+        }
+      }
+    }
+
+    return roots;
+  });
 }

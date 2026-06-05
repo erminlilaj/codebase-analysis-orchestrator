@@ -117,6 +117,12 @@ export const deleteCredential = (envVar: string) =>
   request<void>('DELETE', `/settings/credentials/${envVar}`);
 
 // Filesystem
-export const fsList = (path?: string) =>
-  request<FsListResponse>('GET', `/fs/list${path ? `?path=${encodeURIComponent(path)}` : ''}`);
+export const fsList = (path?: string, showHidden = false) => {
+  const params = new URLSearchParams();
+  if (path) params.set('path', path);
+  if (showHidden) params.set('showHidden', 'true');
+  const qs = params.toString();
+  return request<FsListResponse>('GET', `/fs/list${qs ? `?${qs}` : ''}`);
+};
 export const fsHome = () => request<{ path: string }>('GET', '/fs/home');
+export const fsRoots = () => request<{ label: string; path: string }[]>('GET', '/fs/roots');
