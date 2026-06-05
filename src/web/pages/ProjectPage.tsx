@@ -103,7 +103,7 @@ export const ProjectPage: React.FC = () => {
         <Route index element={<OverviewTab project={project} />} />
         <Route path="files" element={<FilesTab projectId={project.id} />} />
         <Route path="bundles" element={<BundlesTab projectId={project.id} />} />
-        <Route path="questions" element={<QuestionsTab language={project.language} />} />
+        <Route path="questions" element={<QuestionsTab projectId={project.id} language={project.language} />} />
         <Route path="runs" element={<RunsTab projectId={project.id} />} />
         <Route path="exports" element={<ExportsTab projectId={project.id} />} />
       </Routes>

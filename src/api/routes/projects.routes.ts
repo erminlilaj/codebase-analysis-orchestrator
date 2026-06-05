@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { prisma } from '../../db/prisma';
 import { scanDirectory } from '../../core/files/FileScanner';
 import { generateJobs } from '../../core/jobs/jobGenerator';
-import { getQuestionsForLanguage } from '../../core/questions/questionService';
+import { getQuestionsForProject } from '../../core/questions/questionService';
 import { getProviderHealth } from '../../providers/providerRegistry';
 
 export async function projectRoutes(app: FastifyInstance): Promise<void> {
@@ -126,12 +126,20 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
         });
       }
 
-      const qIds =
-        questionIds ?? (await getQuestionsForLanguage(project.language)).map((q) => q.id);
+      const availableQuestions = await getQuestionsForProject(project.id, project.language);
+      const availableQuestionIds = new Set(availableQuestions.map((q) => q.id));
+      const qIds = questionIds ?? availableQuestions.map((q) => q.id);
       if (qIds.length === 0) {
         return reply
           .code(422)
           .send({ error: 'No questions available for this project language' });
+      }
+      const invalidQuestionIds = qIds.filter((id) => !availableQuestionIds.has(id));
+      if (invalidQuestionIds.length > 0) {
+        return reply.code(400).send({
+          error: 'One or more questions are not available for this project',
+          questionIds: invalidQuestionIds,
+        });
       }
 
       const bundles = await prisma.analysisBundle.findMany({

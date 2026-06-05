@@ -50,7 +50,7 @@ const mocks = vi.hoisted(() => ({
   },
   generateJobs: vi.fn(),
   retryJobs: vi.fn(),
-  getQuestionsForLanguage: vi.fn(),
+  getQuestionsForProject: vi.fn(),
   getProviderHealth: vi.fn(),
   listProviderHealth: vi.fn(),
 }));
@@ -59,7 +59,7 @@ vi.mock('../db/prisma', () => ({ prisma: mocks.prisma }));
 vi.mock('../core/jobs/jobGenerator', () => ({ generateJobs: mocks.generateJobs }));
 vi.mock('../core/jobs/retryJobs', () => ({ retryJobs: mocks.retryJobs }));
 vi.mock('../core/questions/questionService', () => ({
-  getQuestionsForLanguage: mocks.getQuestionsForLanguage,
+  getQuestionsForProject: mocks.getQuestionsForProject,
 }));
 vi.mock('../providers/providerRegistry', () => ({
   getProviderHealth: mocks.getProviderHealth,
@@ -387,7 +387,7 @@ describe('buildServer API routes', () => {
     const bundles = [{ id: 'bundle-1' }, { id: 'bundle-2' }];
     const run = { id: 'run-1', projectId: 'project-1', startedAt: now };
     mocks.prisma.project.findUnique.mockResolvedValue(project);
-    mocks.getQuestionsForLanguage.mockResolvedValue([
+    mocks.getQuestionsForProject.mockResolvedValue([
       { id: 'question-1', key: 'purpose', text: 'Purpose?' },
       { id: 'question-2', key: 'data', text: 'Data?' },
     ]);
@@ -406,7 +406,7 @@ describe('buildServer API routes', () => {
       run: { ...run, startedAt: now.toISOString() },
       jobCount: 4,
     });
-    expect(mocks.getQuestionsForLanguage).toHaveBeenCalledWith('cobol');
+    expect(mocks.getQuestionsForProject).toHaveBeenCalledWith('project-1', 'cobol');
     expect(mocks.getProviderHealth).toHaveBeenCalledWith('stub');
     expect(mocks.generateJobs).toHaveBeenCalledWith({
       runId: 'run-1',
@@ -419,7 +419,7 @@ describe('buildServer API routes', () => {
 
   it('stores per-run model and agent in run metadata', async () => {
     mocks.prisma.project.findUnique.mockResolvedValue({ id: 'project-1', language: 'cobol' });
-    mocks.getQuestionsForLanguage.mockResolvedValue([
+    mocks.getQuestionsForProject.mockResolvedValue([
       { id: 'question-1', key: 'purpose', text: 'Purpose?' },
     ]);
     mocks.prisma.analysisBundle.findMany.mockResolvedValue([{ id: 'bundle-1' }]);
@@ -444,7 +444,7 @@ describe('buildServer API routes', () => {
 
   it('rejects run creation when no bundles exist', async () => {
     mocks.prisma.project.findUnique.mockResolvedValue({ id: 'project-1', language: 'cobol' });
-    mocks.getQuestionsForLanguage.mockResolvedValue([
+    mocks.getQuestionsForProject.mockResolvedValue([
       { id: 'question-1', key: 'purpose', text: 'Purpose?' },
     ]);
     mocks.prisma.analysisBundle.findMany.mockResolvedValue([]);
@@ -473,7 +473,7 @@ describe('buildServer API routes', () => {
 
     expect(res.statusCode).toBe(400);
     expect(res.json()).toEqual({ error: 'Unknown provider: unknown' });
-    expect(mocks.getQuestionsForLanguage).not.toHaveBeenCalled();
+    expect(mocks.getQuestionsForProject).not.toHaveBeenCalled();
     expect(mocks.prisma.analysisRun.create).not.toHaveBeenCalled();
     expect(mocks.generateJobs).not.toHaveBeenCalled();
   });
@@ -503,7 +503,7 @@ describe('buildServer API routes', () => {
       error: 'Provider unavailable: bob',
       provider: health,
     });
-    expect(mocks.getQuestionsForLanguage).not.toHaveBeenCalled();
+    expect(mocks.getQuestionsForProject).not.toHaveBeenCalled();
     expect(mocks.prisma.analysisRun.create).not.toHaveBeenCalled();
     expect(mocks.generateJobs).not.toHaveBeenCalled();
   });

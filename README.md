@@ -487,8 +487,8 @@ routes live under `/projects/:id/...`; run-scoped routes under `/runs/:runId/...
 | `GET` | `/settings/credentials` | List stored provider API keys (values masked) |
 | `PUT` | `/settings/credentials/:envVar` | Set/update a provider API key `{ value }` |
 | `DELETE` | `/settings/credentials/:envVar` | Remove a provider API key |
-| `GET` | `/questions` | List questions (optional `?language=`) |
-| `POST` | `/questions` | Create question `{ key, text, language? }` |
+| `GET` | `/questions` | List shared questions (optional `?language=`); with `?projectId=` includes that project's private questions too |
+| `POST` | `/questions` | Create question `{ key, text, language?, projectId? }`; `projectId` makes it private to one project |
 | `GET/PUT/DELETE` | `/questions/:id` | Manage one question |
 | `GET` | `/runs/:runId` | Get run |
 | `GET` | `/runs/:runId/jobs` | List jobs (optional `?status=`) |
@@ -732,7 +732,7 @@ Open <http://127.0.0.1:5173>. Features:
 - **Projects** list with delete + "+ New project"
 - **New project** form with a **server-side folder browser** (no upload — picks paths on the API machine)
 - **Per-project tabs**: Overview / Files / Bundles / Questions / Runs / Exports
-- **Questions editor** — add/edit/delete questions for the project's language
+- **Questions editor** — add/edit/delete project-only questions while showing shared language/universal questions read-only
 - **Files** view with per-language counts and filter
 - **Bundles** view showing main file + resolved context + unresolved deps
 - **New run** form — pick the provider, and for OpenCode set the model + agent per run (saved on the run)

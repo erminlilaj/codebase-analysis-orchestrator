@@ -57,12 +57,17 @@ export const listBundles = (projectId: string) =>
 export const buildBundles = (projectId: string) =>
   request<BundleBuildResult>('POST', `/projects/${projectId}/bundles`);
 
-// Questions (global with optional language tag)
-export const listQuestions = (language?: string) =>
-  request<Question[]>('GET', `/questions${language ? `?language=${language}` : ''}`);
-export const createQuestion = (body: { key: string; text: string; language?: string | null }) =>
+// Questions. With projectId, returns project-private + shared language/universal questions.
+export const listQuestions = (language?: string, projectId?: string) => {
+  const params = new URLSearchParams();
+  if (language) params.set('language', language);
+  if (projectId) params.set('projectId', projectId);
+  const qs = params.toString();
+  return request<Question[]>('GET', `/questions${qs ? `?${qs}` : ''}`);
+};
+export const createQuestion = (body: { key: string; text: string; language?: string | null; projectId?: string | null }) =>
   request<Question>('POST', '/questions', body);
-export const updateQuestion = (id: string, body: { key?: string; text?: string; language?: string | null }) =>
+export const updateQuestion = (id: string, body: { key?: string; text?: string; language?: string | null; projectId?: string | null }) =>
   request<Question>('PUT', `/questions/${id}`, body);
 export const deleteQuestion = (id: string) => request<void>('DELETE', `/questions/${id}`);
 

@@ -16,11 +16,9 @@ import {
   useToast,
 } from '../../components/ui';
 
-// Questions for the project's language. Shared across all projects of that
-// language (e.g. all COBOL projects use the same `cobol` questions).
-export const QuestionsTab: React.FC<{ language: string }> = ({ language }) => {
-  // Show language-specific + universal (null-language) questions.
-  const langScoped = useFetch(() => api.listQuestions(language), [language]);
+// Project-specific questions plus shared questions for the project's language.
+export const QuestionsTab: React.FC<{ projectId: string; language: string }> = ({ projectId, language }) => {
+  const langScoped = useFetch(() => api.listQuestions(language, projectId), [language, projectId]);
   const [error, setError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftKey, setDraftKey] = useState('');
@@ -70,7 +68,12 @@ export const QuestionsTab: React.FC<{ language: string }> = ({ language }) => {
       return;
     }
     try {
-      await api.createQuestion({ key: draftKey.trim(), text: draftText.trim(), language });
+      await api.createQuestion({
+        key: draftKey.trim(),
+        text: draftText.trim(),
+        language,
+        projectId,
+      });
       setCreating(false);
       setDraftKey('');
       setDraftText('');
@@ -95,8 +98,8 @@ export const QuestionsTab: React.FC<{ language: string }> = ({ language }) => {
 
       <div className="flex justify-between items-center">
         <div className="text-sm text-slate-600">
-          Questions for language: <strong>{language}</strong>. Each run asks every
-          listed question about every bundle.
+          Private questions for this project plus shared <strong>{language}</strong>
+          and universal questions. New questions created here are project-only.
         </div>
         {!creating ? (
           <Button size="sm" onClick={() => { setCreating(true); setDraftKey(''); setDraftText(''); }}>
@@ -108,7 +111,7 @@ export const QuestionsTab: React.FC<{ language: string }> = ({ language }) => {
       {creating ? (
         <Card>
           <CardHeader>
-            <div className="font-medium text-sm">New question (language: {language})</div>
+            <div className="font-medium text-sm">New project-only question</div>
           </CardHeader>
           <CardBody className="space-y-3">
             <div>
@@ -163,18 +166,22 @@ export const QuestionsTab: React.FC<{ language: string }> = ({ language }) => {
                         <code className="bg-violet-100 text-violet-800 text-xs px-2 py-0.5 rounded">
                           {q.key}
                         </code>
-                        {q.language ? (
-                          <span className="text-xs text-slate-500">[{q.language}]</span>
+                        {q.projectId === projectId ? (
+                          <span className="text-xs text-emerald-700">[project-only]</span>
+                        ) : q.language ? (
+                          <span className="text-xs text-slate-500">[{q.language} shared]</span>
                         ) : (
-                          <span className="text-xs text-slate-500">[universal]</span>
+                          <span className="text-xs text-slate-500">[universal shared]</span>
                         )}
                       </div>
                       <div className="text-sm text-slate-700">{q.text}</div>
                     </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => startEdit(q)}>Edit</Button>
-                      <Button variant="ghost" size="sm" onClick={() => setPending(q)}>Delete</Button>
-                    </div>
+                    {q.projectId === projectId ? (
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => startEdit(q)}>Edit</Button>
+                        <Button variant="ghost" size="sm" onClick={() => setPending(q)}>Delete</Button>
+                      </div>
+                    ) : null}
                   </div>
                 </CardBody>
               </Card>

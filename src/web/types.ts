@@ -24,6 +24,8 @@ export type Question = {
   key: string;
   text: string;
   language: string | null;
+  projectId: string | null;
+  version: number;
   createdAt: string;
 };
 

@@ -121,7 +121,7 @@ const NewRunForm: React.FC<{
 
   useEffect(() => {
     if (!project) return;
-    void api.listQuestions(project.language).then((qs) => {
+    void api.listQuestions(project.language, project.id).then((qs) => {
       setQuestions(qs);
       setSelected(new Set(qs.map((q) => q.id)));
     });
@@ -293,6 +293,9 @@ const NewRunForm: React.FC<{
                     className="rounded"
                   />
                   <code className="bg-violet-100 text-violet-800 text-xs px-2 py-0.5 rounded">{q.key}</code>
+                  {q.projectId === project?.id ? (
+                    <span className="text-xs text-emerald-700 shrink-0">project-only</span>
+                  ) : null}
                   <span className="text-sm text-slate-700 truncate">{q.text}</span>
                 </li>
               ))}
